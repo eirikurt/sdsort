@@ -6,6 +6,7 @@ authors = ["Eiríkur Torfason <eirikur.torfason@gmail.com>"]
 
 [tool.poetry.dependencies]
 python = "3.7"
+astor = "^0.8.1"
 
 [tool.poetry.dev-dependencies]
 pytest = "^6.2.3"
