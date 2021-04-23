@@ -11,7 +11,7 @@ def test_all_cases():
     # Arrange
     input_file_path = "test/cases/single_class.in.py"
     expected_output_file_path = "test/cases/single_class.out.py"
-    #in_text = read_file(input_file_path)
+    # in_text = read_file(input_file_path)
     expected_output = read_file(expected_output_file_path)
 
     # Act
