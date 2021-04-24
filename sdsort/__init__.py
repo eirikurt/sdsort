@@ -1,7 +1,7 @@
 from _ast import ClassDef, Module, FunctionDef
 from ast import walk, Call, Attribute
 from collections import defaultdict
-from typing import Iterable, Dict, List
+from typing import Iterable, Dict, List, Tuple
 
 import ast
 
@@ -52,15 +52,24 @@ def _sort_methods_within_class(
     sorted_dict = {}
     for method_name in method_dict:
         _depth_first_sort(method_name, method_dict, dependencies, sorted_dict)
-    print(sorted_dict.keys())
-    result = source_lines[class_def.lineno : methods[0].lineno - 1]
-    for method in sorted_dict.values():
-        following_methods = [m.lineno for m in methods if m.lineno > method.lineno]
-        if len(following_methods) > 0:
-            stop = min(following_methods) - 1
-        else:
-            stop = max(n.lineno for n in walk(method) if hasattr(n, "lineno"))
-        result.extend(source_lines[method.lineno - 1 : stop])
+
+    # Copy lines from the original source, shifting the methods around as needed
+    source_position = class_def.lineno
+    result = []
+    for original_method, replacement_method in zip(methods, sorted_dict.values()):
+        original_method_range = _determine_line_range(original_method)
+        replacement_method_range = _determine_line_range(replacement_method)
+
+        # Add everything, that hasn't been copied so far, up to where the original method starts
+        result.extend(source_lines[source_position : original_method_range[0]])
+
+        # Copy the replacement method
+        result.extend(
+            source_lines[replacement_method_range[0] : replacement_method_range[1]]
+        )
+
+        # Move the position cursor to where the original method ended
+        source_position = original_method_range[1]
     return result
 
 
@@ -88,3 +97,11 @@ def _depth_first_sort(
     for dependency in dependencies[current_method_name]:
         # TODO: Detect/break cycles
         _depth_first_sort(dependency, method_dict, dependencies, sorted_dict)
+
+
+def _determine_line_range(method: FunctionDef) -> Tuple[int, int]:
+    start = method.lineno
+    if len(method.decorator_list) > 0:
+        start = min(d.lineno for d in method.decorator_list)
+    stop = max(n.lineno for n in walk(method) if hasattr(n, "lineno"))
+    return start - 1, stop
