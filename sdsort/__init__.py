@@ -1,9 +1,11 @@
-from _ast import ClassDef, Module, FunctionDef
-from ast import walk, Call, Attribute
-from collections import defaultdict
-from typing import Iterable, Dict, List, Tuple
-
 import ast
+from ast import AsyncFunctionDef, Attribute, Call, ClassDef, FunctionDef, Module, walk
+from collections import defaultdict
+from typing import Dict, Iterable, List, Tuple
+
+# TODO: command line utility that modifies a file
+# TODO: Don't write updated file unless methods were moved
+# TODO: ability to scan a folder recursively and rearrange all *.py files
 
 
 def step_down_sort(python_file_path: str) -> str:
@@ -17,8 +19,6 @@ def step_down_sort(python_file_path: str) -> str:
         modified_lines.extend(source_lines[len(modified_lines) : cls.lineno])
         modified_lines.extend(_sort_methods_within_class(source_lines, cls))
     modified_lines.extend(source_lines[len(modified_lines) :])
-    # TODO: Don't write updated file unless methods were moved
-    # TODO: remove astor dependency?
     return "\n".join(modified_lines) + "\n"
 
 
@@ -42,7 +42,11 @@ def _sort_methods_within_class(
     source_lines: List[str], class_def: ClassDef
 ) -> List[str]:
     # Find methods
-    methods = [node for node in class_def.body if isinstance(node, FunctionDef)]
+    methods = [
+        node
+        for node in class_def.body
+        if isinstance(node, FunctionDef) or isinstance(node, AsyncFunctionDef)
+    ]
     method_dict = {m.name: m for m in methods}
 
     # Build dependency graph among methods
@@ -104,4 +108,5 @@ def _determine_line_range(method: FunctionDef) -> Tuple[int, int]:
     if len(method.decorator_list) > 0:
         start = min(d.lineno for d in method.decorator_list)
     stop = max(n.lineno for n in walk(method) if hasattr(n, "lineno"))
+    # TODO: probe a bit further until we find a line with less indentation?
     return start - 1, stop
