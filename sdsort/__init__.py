@@ -1,5 +1,4 @@
-import ast
-from ast import AsyncFunctionDef, Attribute, Call, ClassDef, FunctionDef, Module, walk
+from ast import AsyncFunctionDef, Attribute, Call, ClassDef, FunctionDef, Module, parse, walk
 from collections import defaultdict
 from typing import Dict, Iterable, List, Tuple
 
@@ -10,7 +9,7 @@ from typing import Dict, Iterable, List, Tuple
 
 def step_down_sort(python_file_path: str) -> str:
     source = _read_file(python_file_path)
-    syntax_tree = ast.parse(source, filename=python_file_path)
+    syntax_tree = parse(source, filename=python_file_path)
     source_lines = source.splitlines()
 
     modified_lines = []
@@ -45,13 +44,14 @@ def _find_classes(syntax_tree: Module) -> Iterable[ClassDef]:
 
 def _sort_methods_within_class(source_lines: List[str], class_def: ClassDef) -> List[str]:
     # Find methods
-    methods = [
-        node for node in class_def.body if isinstance(node, FunctionDef) or isinstance(node, AsyncFunctionDef)
-    ]
-    method_dict = {m.name: m for m in methods}
+    method_dict = {
+        node.name: node
+        for node in class_def.body
+        if isinstance(node, FunctionDef) or isinstance(node, AsyncFunctionDef)
+    }
 
     # Build dependency graph among methods
-    dependencies = _find_dependencies(methods)
+    dependencies = _find_dependencies(method_dict)
 
     # Re-order methods as needed
     sorted_dict = {}
@@ -61,7 +61,7 @@ def _sort_methods_within_class(source_lines: List[str], class_def: ClassDef) -> 
     # Copy lines from the original source, shifting the methods around as needed
     source_position = class_def.lineno
     result = []
-    for original_method, replacement_method in zip(methods, sorted_dict.values()):
+    for original_method, replacement_method in zip(method_dict.values(), sorted_dict.values()):
         original_method_range = _determine_line_range(original_method, source_lines)
         replacement_method_range = _determine_line_range(replacement_method, source_lines)
 
@@ -76,14 +76,13 @@ def _sort_methods_within_class(source_lines: List[str], class_def: ClassDef) -> 
     return result
 
 
-def _find_dependencies(methods: List[FunctionDef]) -> Dict[str, List[str]]:
+def _find_dependencies(methods: Dict[str, FunctionDef]) -> Dict[str, List[str]]:
     dependencies = defaultdict(list)
-    method_names = set((m.name for m in methods))
-    for method in methods:
+    for method in methods.values():
         for node in walk(method):
             if isinstance(node, Call) and isinstance(node.func, Attribute):
                 target = node.func.attr
-                if target in method_names and target not in dependencies[method.name]:
+                if target in methods and target not in dependencies[method.name]:
                     dependencies[method.name].append(target)
     return dependencies
 
@@ -93,7 +92,7 @@ def _depth_first_sort(
     method_dict: Dict[str, FunctionDef],
     dependencies: Dict[str, List[str]],
     sorted_dict: Dict[str, FunctionDef],
-    path: List[str]
+    path: List[str],
 ):
     path.append(current_method_name)
 
@@ -113,7 +112,7 @@ def _determine_line_range(method: FunctionDef, source_lines: List[str]) -> Tuple
         start = min(d.lineno for d in method.decorator_list)
     stop = max(n.lineno for n in walk(method) if hasattr(n, "lineno"))
 
-    # Probe a bit further until we find an empty line or one less indentation than the method body
+    # Probe a bit further until we find an empty line or one with less indentation than the method body
     peek = source_lines[stop] if stop < len(source_lines) else ""
     while peek.strip() != "" and (
         peek.startswith(" " * (method.col_offset + 1)) or peek.startswith("\t" * (method.col_offset + 1))
