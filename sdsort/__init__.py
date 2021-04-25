@@ -9,16 +9,21 @@ from typing import Dict, Iterable, List, Tuple
 
 
 def step_down_sort(python_file_path: str) -> str:
-    #
     source = _read_file(python_file_path)
     syntax_tree = ast.parse(source, filename=python_file_path)
     source_lines = source.splitlines()
-    modified_lines = []
 
+    modified_lines = []
     for cls in _find_classes(syntax_tree):
+        # Copy everything, which hasn't been copied so far, up until the class def,
         modified_lines.extend(source_lines[len(modified_lines) : cls.lineno])
+
+        # Copy class after sorting its methods
         modified_lines.extend(_sort_methods_within_class(source_lines, cls))
+
+    # Copy remainder of file
     modified_lines.extend(source_lines[len(modified_lines) :])
+
     return "\n".join(modified_lines) + "\n"
 
 
@@ -61,8 +66,10 @@ def _sort_methods_within_class(
     source_position = class_def.lineno
     result = []
     for original_method, replacement_method in zip(methods, sorted_dict.values()):
-        original_method_range = _determine_line_range(original_method)
-        replacement_method_range = _determine_line_range(replacement_method)
+        original_method_range = _determine_line_range(original_method, source_lines)
+        replacement_method_range = _determine_line_range(
+            replacement_method, source_lines
+        )
 
         # Add everything, that hasn't been copied so far, up to where the original method starts
         result.extend(source_lines[source_position : original_method_range[0]])
@@ -103,10 +110,23 @@ def _depth_first_sort(
         _depth_first_sort(dependency, method_dict, dependencies, sorted_dict)
 
 
-def _determine_line_range(method: FunctionDef) -> Tuple[int, int]:
+def _determine_line_range(
+    method: FunctionDef, source_lines: List[str]
+) -> Tuple[int, int]:
     start = method.lineno
     if len(method.decorator_list) > 0:
         start = min(d.lineno for d in method.decorator_list)
     stop = max(n.lineno for n in walk(method) if hasattr(n, "lineno"))
-    # TODO: probe a bit further until we find a line with less indentation?
+
+    # Probe a bit further until we find an empty line or one less indentation than the method body
+    peek = source_lines[stop] if stop < len(source_lines) else ""
+    while peek.strip() != "" and (
+        peek.startswith(" " * (method.col_offset + 1))
+        or peek.startswith("\t" * (method.col_offset + 1))
+    ):
+        stop += 1
+        peek = source_lines[stop] if stop < len(source_lines) else ""
+
+    # AST line numbers are 1-based. Subtract one from the start position to make it 0-based
+    # The stop position is exclusive (making this a half-open range) so leave it as is.
     return start - 1, stop
