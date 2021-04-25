@@ -5,7 +5,7 @@ description = "Sorts functions and methods according to the step-down rule"
 authors = ["Eiríkur Fannar Torfason <eirikur.torfason@gmail.com>"]
 
 [tool.poetry.dependencies]
-python = ">=3.7"
+python = ">=3.7,<4.0"
 click = "^7.1.2"
 
 [tool.poetry.dev-dependencies]
@@ -15,12 +15,15 @@ mypy = "^0.812"
 flake8 = "^3.9.1"
 isort = "^5.8.0"
 
+[tool.poetry.scripts]
+sdsort = "sdsort:main"
+
 [tool.black]
 line-length = 115
 target-version = ['py37']
 
 [tool.isort]
-line-length = 115
+line_length = 115
 profile = "black"
 known_local_folder = ["test"]
 

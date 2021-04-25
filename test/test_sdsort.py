@@ -2,9 +2,9 @@ import shutil
 import tempfile
 
 import pytest
-
 from click.testing import CliRunner
-from sdsort import step_down_sort, main
+
+from sdsort import main, step_down_sort
 
 TEST_CASES_DIR = "test/cases"
 

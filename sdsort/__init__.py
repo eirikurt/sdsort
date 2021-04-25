@@ -1,35 +1,39 @@
 from ast import AsyncFunctionDef, Attribute, Call, ClassDef, FunctionDef, Module, parse, walk
 from collections import defaultdict
-from typing import Dict, Iterable, List, Tuple
+from typing import Dict, Iterable, List, Optional, Tuple, Union
 
-# TODO: command line utility that modifies a file
+import click
+
+# TODO: proper help for CLI
+# TODO: report what files were processed
+# TODO: reject files that are not python files
 # TODO: Don't write updated file unless methods were moved
 # TODO: ability to scan a folder recursively and rearrange all *.py files
-import click
+
+FunDef = Union[FunctionDef, AsyncFunctionDef]
 
 
 @click.command()
 @click.argument(
     "paths",
     nargs=-1,
-    type=click.Path(
-        exists=True, file_okay=True, dir_okay=True, readable=True, allow_dash=True
-    ),
+    type=click.Path(exists=True, file_okay=True, dir_okay=True, readable=True, allow_dash=True),
     is_eager=True,
 )
 def main(paths: Tuple[str, ...]):
     for path in paths:
         modified_source = step_down_sort(path)
-        with open(path, "w") as file:
-            file.write(modified_source)
+        if modified_source is not None:
+            with open(path, "w") as file:
+                file.write(modified_source)
 
 
-def step_down_sort(python_file_path: str) -> str:
+def step_down_sort(python_file_path: str) -> Optional[str]:
     source = _read_file(python_file_path)
     syntax_tree = parse(source, filename=python_file_path)
     source_lines = source.splitlines()
 
-    modified_lines = []
+    modified_lines: List[str] = []
     for cls in _find_classes(syntax_tree):
         # Copy everything, which hasn't been copied so far, up until the class def,
         modified_lines.extend(source_lines[len(modified_lines) : cls.lineno])
@@ -40,8 +44,10 @@ def step_down_sort(python_file_path: str) -> str:
     # Copy remainder of file
     modified_lines.extend(source_lines[len(modified_lines) :])
 
-    # TODO: check if anything has changed, report back
-    return "\n".join(modified_lines) + "\n"
+    if source_lines != modified_lines:
+        return "\n".join(modified_lines) + "\n"
+    else:
+        return None
 
 
 def _read_file(file_path: str) -> str:
@@ -74,7 +80,7 @@ def _sort_methods_within_class(source_lines: List[str], class_def: ClassDef) -> 
     dependencies = _find_dependencies(method_dict)
 
     # Re-order methods as needed
-    sorted_dict = {}
+    sorted_dict: Dict[str, FunDef] = {}
     for method_name in method_dict:
         _depth_first_sort(method_name, method_dict, dependencies, sorted_dict, [])
 
@@ -82,8 +88,8 @@ def _sort_methods_within_class(source_lines: List[str], class_def: ClassDef) -> 
     return _rearrange_class_code(class_def, method_dict, sorted_dict, source_lines)
 
 
-def _find_dependencies(methods: Dict[str, FunctionDef]) -> Dict[str, List[str]]:
-    dependencies = defaultdict(list)
+def _find_dependencies(methods: Dict[str, FunDef]) -> Dict[str, List[str]]:
+    dependencies: Dict[str, List[str]] = defaultdict(list)
     for method in methods.values():
         for node in walk(method):
             if isinstance(node, Call) and isinstance(node.func, Attribute):
@@ -95,9 +101,9 @@ def _find_dependencies(methods: Dict[str, FunctionDef]) -> Dict[str, List[str]]:
 
 def _depth_first_sort(
     current_method_name: str,
-    method_dict: Dict[str, FunctionDef],
+    method_dict: Dict[str, FunDef],
     dependencies: Dict[str, List[str]],
-    sorted_dict: Dict[str, FunctionDef],
+    sorted_dict: Dict[str, FunDef],
     path: List[str],
 ):
     path.append(current_method_name)
@@ -114,8 +120,8 @@ def _depth_first_sort(
 
 def _rearrange_class_code(
     class_def: ClassDef,
-    method_dict: Dict[str, FunctionDef],
-    sorted_dict: Dict[str, FunctionDef],
+    method_dict: Dict[str, FunDef],
+    sorted_dict: Dict[str, FunDef],
     source_lines: List[str],
 ) -> List[str]:
     source_position = class_def.lineno
@@ -135,7 +141,7 @@ def _rearrange_class_code(
     return result
 
 
-def _determine_line_range(method: FunctionDef, source_lines: List[str]) -> Tuple[int, int]:
+def _determine_line_range(method: FunDef, source_lines: List[str]) -> Tuple[int, int]:
     start = method.lineno
     if len(method.decorator_list) > 0:
         start = min(d.lineno for d in method.decorator_list)
