@@ -56,7 +56,7 @@ def _sort_methods_within_class(source_lines: List[str], class_def: ClassDef) -> 
     # Re-order methods as needed
     sorted_dict = {}
     for method_name in method_dict:
-        _depth_first_sort(method_name, method_dict, dependencies, sorted_dict)
+        _depth_first_sort(method_name, method_dict, dependencies, sorted_dict, [])
 
     # Copy lines from the original source, shifting the methods around as needed
     source_position = class_def.lineno
@@ -93,13 +93,18 @@ def _depth_first_sort(
     method_dict: Dict[str, FunctionDef],
     dependencies: Dict[str, List[str]],
     sorted_dict: Dict[str, FunctionDef],
+    path: List[str]
 ):
+    path.append(current_method_name)
+
     # Rely on the fact that dicts maintain insertion order as of Python 3.7
     method = sorted_dict.pop(current_method_name, method_dict[current_method_name])
     sorted_dict[current_method_name] = method
     for dependency in dependencies[current_method_name]:
-        # TODO: Detect/break cycles
-        _depth_first_sort(dependency, method_dict, dependencies, sorted_dict)
+        if dependency not in path:
+            _depth_first_sort(dependency, method_dict, dependencies, sorted_dict, path)
+
+    path.pop()
 
 
 def _determine_line_range(method: FunctionDef, source_lines: List[str]) -> Tuple[int, int]:
