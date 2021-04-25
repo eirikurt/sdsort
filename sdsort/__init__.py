@@ -43,6 +43,8 @@ def _find_classes(syntax_tree: Module) -> Iterable[ClassDef]:
 
 
 def _sort_methods_within_class(source_lines: List[str], class_def: ClassDef) -> List[str]:
+    # TODO: recursively sort methods within nested classes?
+
     # Find methods
     method_dict = {
         node.name: node
@@ -59,21 +61,7 @@ def _sort_methods_within_class(source_lines: List[str], class_def: ClassDef) -> 
         _depth_first_sort(method_name, method_dict, dependencies, sorted_dict, [])
 
     # Copy lines from the original source, shifting the methods around as needed
-    source_position = class_def.lineno
-    result = []
-    for original_method, replacement_method in zip(method_dict.values(), sorted_dict.values()):
-        original_method_range = _determine_line_range(original_method, source_lines)
-        replacement_method_range = _determine_line_range(replacement_method, source_lines)
-
-        # Add everything, that hasn't been copied so far, up to where the original method starts
-        result.extend(source_lines[source_position : original_method_range[0]])
-
-        # Copy the replacement method
-        result.extend(source_lines[replacement_method_range[0] : replacement_method_range[1]])
-
-        # Move the position cursor to where the original method ended
-        source_position = original_method_range[1]
-    return result
+    return _rearrange_class_code(class_def, method_dict, sorted_dict, source_lines)
 
 
 def _find_dependencies(methods: Dict[str, FunctionDef]) -> Dict[str, List[str]]:
@@ -104,6 +92,29 @@ def _depth_first_sort(
             _depth_first_sort(dependency, method_dict, dependencies, sorted_dict, path)
 
     path.pop()
+
+
+def _rearrange_class_code(
+    class_def: ClassDef,
+    method_dict: Dict[str, FunctionDef],
+    sorted_dict: Dict[str, FunctionDef],
+    source_lines: List[str],
+) -> List[str]:
+    source_position = class_def.lineno
+    result = []
+    for original_method, replacement_method in zip(method_dict.values(), sorted_dict.values()):
+        original_method_range = _determine_line_range(original_method, source_lines)
+        replacement_method_range = _determine_line_range(replacement_method, source_lines)
+
+        # Add everything, that hasn't been copied so far, up to where the original method starts
+        result.extend(source_lines[source_position : original_method_range[0]])
+
+        # Copy the replacement method
+        result.extend(source_lines[replacement_method_range[0] : replacement_method_range[1]])
+
+        # Move the position cursor to where the original method ended
+        source_position = original_method_range[1]
+    return result
 
 
 def _determine_line_range(method: FunctionDef, source_lines: List[str]) -> Tuple[int, int]:
