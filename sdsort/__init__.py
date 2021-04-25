@@ -43,14 +43,10 @@ def _find_classes(syntax_tree: Module) -> Iterable[ClassDef]:
             yield node
 
 
-def _sort_methods_within_class(
-    source_lines: List[str], class_def: ClassDef
-) -> List[str]:
+def _sort_methods_within_class(source_lines: List[str], class_def: ClassDef) -> List[str]:
     # Find methods
     methods = [
-        node
-        for node in class_def.body
-        if isinstance(node, FunctionDef) or isinstance(node, AsyncFunctionDef)
+        node for node in class_def.body if isinstance(node, FunctionDef) or isinstance(node, AsyncFunctionDef)
     ]
     method_dict = {m.name: m for m in methods}
 
@@ -67,17 +63,13 @@ def _sort_methods_within_class(
     result = []
     for original_method, replacement_method in zip(methods, sorted_dict.values()):
         original_method_range = _determine_line_range(original_method, source_lines)
-        replacement_method_range = _determine_line_range(
-            replacement_method, source_lines
-        )
+        replacement_method_range = _determine_line_range(replacement_method, source_lines)
 
         # Add everything, that hasn't been copied so far, up to where the original method starts
         result.extend(source_lines[source_position : original_method_range[0]])
 
         # Copy the replacement method
-        result.extend(
-            source_lines[replacement_method_range[0] : replacement_method_range[1]]
-        )
+        result.extend(source_lines[replacement_method_range[0] : replacement_method_range[1]])
 
         # Move the position cursor to where the original method ended
         source_position = original_method_range[1]
@@ -110,9 +102,7 @@ def _depth_first_sort(
         _depth_first_sort(dependency, method_dict, dependencies, sorted_dict)
 
 
-def _determine_line_range(
-    method: FunctionDef, source_lines: List[str]
-) -> Tuple[int, int]:
+def _determine_line_range(method: FunctionDef, source_lines: List[str]) -> Tuple[int, int]:
     start = method.lineno
     if len(method.decorator_list) > 0:
         start = min(d.lineno for d in method.decorator_list)
@@ -121,8 +111,7 @@ def _determine_line_range(
     # Probe a bit further until we find an empty line or one less indentation than the method body
     peek = source_lines[stop] if stop < len(source_lines) else ""
     while peek.strip() != "" and (
-        peek.startswith(" " * (method.col_offset + 1))
-        or peek.startswith("\t" * (method.col_offset + 1))
+        peek.startswith(" " * (method.col_offset + 1)) or peek.startswith("\t" * (method.col_offset + 1))
     ):
         stop += 1
         peek = source_lines[stop] if stop < len(source_lines) else ""

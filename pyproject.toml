@@ -15,9 +15,11 @@ flake8 = "^3.9.1"
 isort = "^5.8.0"
 
 [tool.black]
+line-length = 115
 target-version = ['py37']
 
 [tool.isort]
+line-length = 115
 profile = "black"
 known_local_folder = ["test"]
 
