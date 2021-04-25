@@ -2,10 +2,11 @@
 name = "sdsort"
 version = "0.1.0"
 description = "Sorts functions and methods according to the step-down rule"
-authors = ["Eiríkur Torfason <eirikur.torfason@gmail.com>"]
+authors = ["Eiríkur Fannar Torfason <eirikur.torfason@gmail.com>"]
 
 [tool.poetry.dependencies]
-python = "3.7"
+python = ">=3.7"
+click = "^7.1.2"
 
 [tool.poetry.dev-dependencies]
 pytest = "^6.2.3"

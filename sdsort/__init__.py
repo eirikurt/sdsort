@@ -5,6 +5,23 @@ from typing import Dict, Iterable, List, Tuple
 # TODO: command line utility that modifies a file
 # TODO: Don't write updated file unless methods were moved
 # TODO: ability to scan a folder recursively and rearrange all *.py files
+import click
+
+
+@click.command()
+@click.argument(
+    "paths",
+    nargs=-1,
+    type=click.Path(
+        exists=True, file_okay=True, dir_okay=True, readable=True, allow_dash=True
+    ),
+    is_eager=True,
+)
+def main(paths: Tuple[str, ...]):
+    for path in paths:
+        modified_source = step_down_sort(path)
+        with open(path, "w") as file:
+            file.write(modified_source)
 
 
 def step_down_sort(python_file_path: str) -> str:
@@ -23,6 +40,7 @@ def step_down_sort(python_file_path: str) -> str:
     # Copy remainder of file
     modified_lines.extend(source_lines[len(modified_lines) :])
 
+    # TODO: check if anything has changed, report back
     return "\n".join(modified_lines) + "\n"
 
 
