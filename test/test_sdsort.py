@@ -1,6 +1,7 @@
 # TODO: add test cases for
 # - nested classes?
 # - nested functions
+# - dataclass
 import pytest
 
 from sdsort import step_down_sort
@@ -8,7 +9,7 @@ from sdsort import step_down_sort
 TEST_CASES_DIR = "test/cases"
 
 
-@pytest.mark.parametrize("test_case,", ["single_class", "comments", "circular"])
+@pytest.mark.parametrize("test_case,", ["single_class", "comments", "circular", "nested_class"])
 def test_all_cases(test_case: str):
     # Arrange
     input_file_path = f"{TEST_CASES_DIR}/{test_case}.in.py"
