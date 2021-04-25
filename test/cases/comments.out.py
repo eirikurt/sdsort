@@ -46,3 +46,4 @@ class Comment:
         parameter6: Optional[int] = None,
     ):
         print("I was called")
+        # Stuff got printed
