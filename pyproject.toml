@@ -5,7 +5,7 @@ description = "Sorts functions and methods according to the step-down rule"
 authors = ["Eiríkur Torfason <eirikur.torfason@gmail.com>"]
 
 [tool.poetry.dependencies]
-python = "3.7"
+python = "^3.7"
 
 [tool.poetry.dev-dependencies]
 pytest = "^6.2.3"
