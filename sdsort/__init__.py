@@ -17,7 +17,7 @@ FunDef = Union[FunctionDef, AsyncFunctionDef]
 @click.argument(
     "paths",
     nargs=-1,
-    type=click.Path(exists=True, file_okay=True, dir_okay=True, readable=True, allow_dash=True),
+    type=click.Path(exists=True, file_okay=True, dir_okay=True, readable=True),
     is_eager=True,
 )
 def main(paths: Tuple[str, ...]):
