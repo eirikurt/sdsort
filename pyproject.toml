@@ -1,8 +1,11 @@
 [tool.poetry]
 name = "sdsort"
-version = "0.1.0"
-description = "Sorts functions and methods according to the step-down rule"
+version = "0.1.1"
+description = "Sorts class methods according to the step-down rule"
 authors = ["Eiríkur Fannar Torfason <eirikur.torfason@gmail.com>"]
+
+readme = "README.md"
+repository = "https://github.com/eirikurt/sdsort"
 
 [tool.poetry.dependencies]
 python = ">=3.7,<4.0"
