@@ -1,5 +1,7 @@
+import os
 from ast import AsyncFunctionDef, Attribute, Call, ClassDef, FunctionDef, Module, parse, walk
 from collections import defaultdict
+from glob import glob
 from typing import Dict, Iterable, List, Optional, Tuple, Union
 
 import click
@@ -21,11 +23,25 @@ FunDef = Union[FunctionDef, AsyncFunctionDef]
     is_eager=True,
 )
 def main(paths: Tuple[str, ...]):
-    for path in paths:
-        modified_source = step_down_sort(path)
+    file_paths = _expand_file_paths(paths)
+    for file_path in sorted(file_paths):
+        modified_source = step_down_sort(file_path)
         if modified_source is not None:
-            with open(path, "w") as file:
+            with open(file_path, "w") as file:
+                click.echo(f"{file_path} is all sorted")
                 file.write(modified_source)
+        else:
+            click.echo(f"{file_path} is unchanged")
+
+
+def _expand_file_paths(paths: Tuple[str, ...]) -> Iterable[str]:
+    file_paths = []
+    for path in paths:
+        if os.path.isdir(path):
+            file_paths.extend(glob(os.path.join(path, "**.py")))
+        else:
+            file_paths.append(path)
+    return file_paths
 
 
 def step_down_sort(python_file_path: str) -> Optional[str]:

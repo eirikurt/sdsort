@@ -1,5 +1,6 @@
 import shutil
 import tempfile
+from os import path
 
 import pytest
 from click.testing import CliRunner
@@ -45,6 +46,29 @@ def test_when_single_file_is_targeted_then_other_files_are_not_modified():
     # Assert
     assert target_after == read_file(f"{TEST_CASES_DIR}/comments.out.py"), "Target file should be sorted"
     assert other_after == read_file(other_file), "Other file should be unchanged"
+
+
+def test_when_directory_is_provided_then_all_python_files_in_it_are_sorted():
+    # Arrange
+    test_cases = ["comments", "dataclass"]
+    runner = CliRunner()
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        # Copy a couple of files
+        for tc in test_cases:
+            shutil.copy(f"{TEST_CASES_DIR}/{tc}.in.py", temp_dir)
+
+        # Act
+        runner.invoke(main, [temp_dir])
+
+        # Files back
+        files_after = {tc: read_file(path.join(temp_dir, f"{tc}.in.py")) for tc in test_cases}
+
+    # Assert
+    for tc, file_after in files_after.items():
+        assert file_after == read_file(f"{TEST_CASES_DIR}/{tc}.out.py")
+    # TODO: assert that other files in directory were not modified?
+    # TODO: put something into a subdirectory to verify that directories are recursed into
 
 
 def read_file(file_path: str) -> str:
