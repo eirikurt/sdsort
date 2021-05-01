@@ -11,7 +11,7 @@ To target individual files, run the `sdsort` command, followed by the paths to t
 sdsort <file_1> <file_2>
 ```
 
-To sort all *.py files in a directory, and all of its subdirectories, run the `sdsort` command followed by the directory path:
+To sort all `*.py` files in a directory, and all of its subdirectories, run the `sdsort` command followed by the directory path:
 ```
 sdsort <directory_path>
 ```
