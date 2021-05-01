@@ -10,7 +10,6 @@ import click
 # TODO: report what files were processed
 # TODO: reject files that are not python files
 # TODO: Don't write updated file unless methods were moved
-# TODO: ability to scan a folder recursively and rearrange all *.py files
 
 FunDef = Union[FunctionDef, AsyncFunctionDef]
 
@@ -38,7 +37,7 @@ def _expand_file_paths(paths: Tuple[str, ...]) -> Iterable[str]:
     file_paths = []
     for path in paths:
         if os.path.isdir(path):
-            file_paths.extend(glob(os.path.join(path, "**.py")))
+            file_paths.extend(glob(os.path.join(path, "**/*.py"), recursive=True))
         else:
             file_paths.append(path)
     return file_paths
