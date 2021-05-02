@@ -6,11 +6,6 @@ from typing import Dict, Iterable, List, Optional, Tuple, Union
 
 import click
 
-# TODO: proper help for CLI
-# TODO: report what files were processed
-# TODO: reject files that are not python files
-# TODO: Don't write updated file unless methods were moved
-
 FunDef = Union[FunctionDef, AsyncFunctionDef]
 
 
@@ -27,8 +22,8 @@ def main(paths: Tuple[str, ...]):
         modified_source = step_down_sort(file_path)
         if modified_source is not None:
             with open(file_path, "w") as file:
-                click.echo(f"{file_path} is all sorted")
                 file.write(modified_source)
+            click.echo(f"{file_path} is all sorted")
         else:
             click.echo(f"{file_path} is unchanged")
 
