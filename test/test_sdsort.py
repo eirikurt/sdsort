@@ -11,7 +11,21 @@ TEST_CASES_DIR = "test/cases"
 
 
 @pytest.mark.parametrize(
-    "test_case,", ["single_class", "comments", "circular", "nested_class", "nested_function", "dataclass"]
+    "test_case,",
+    [
+        "single_class",
+        "comments",
+        "circular",
+        "nested_class",
+        "nested_function",
+        "dataclass",
+        "top_level_functions",
+        "top_level_with_invocation",
+        "mixed_class_and_functions",
+        "function_decorator",
+        "async_functions",
+        "circular_functions",
+    ],
 )
 def test_all_cases(test_case: str):
     # Arrange
