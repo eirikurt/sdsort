@@ -1,4 +1,0 @@
-[flake8]
-ignore = E203
-exclude = test/cases
-max_line_length = 120
