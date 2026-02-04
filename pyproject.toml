@@ -1,35 +1,29 @@
-[tool.poetry]
+[project]
 name = "sdsort"
 version = "0.1.1"
 description = "Sorts class methods according to the step-down rule"
-authors = ["Eiríkur Fannar Torfason <eirikur.torfason@gmail.com>"]
-
+authors = [
+    { name = "Eiríkur Fannar Torfason", email = "eirikur.torfason@gmail.com" },
+]
+requires-python = ">= 3.13"
 readme = "README.md"
-repository = "https://github.com/eirikurt/sdsort"
+dependencies = ["click>=8.3.1"]
 
-[tool.poetry.dependencies]
-python = ">=3.7,<4.0"
-click = "^7.1.2"
+[dependency-groups]
+dev = [
+    "pytest (>=9.0.2,<10.0.0)",
+    "ruff (>=0.15.0,<0.16.0)",
+    "pyright (>=1.1.408,<2.0.0)",
+]
 
-[tool.poetry.dev-dependencies]
-pytest = "^6.2.3"
-black = "^20.8b1"
-mypy = "^0.812"
-flake8 = "^3.9.1"
-isort = "^5.8.0"
-
-[tool.poetry.scripts]
+[project.scripts]
 sdsort = "sdsort:main"
 
-[tool.black]
+[tool.ruff]
+exclude = ["test/cases"]
 line-length = 115
-target-version = ['py37']
+target-version = "py314"
 
-[tool.isort]
-line_length = 115
-profile = "black"
-known_local_folder = ["test"]
-
-[build-system]
-requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
+[tool.pyright]
+include = ["sdsort", "test"]
+exclude = ["test/cases"]

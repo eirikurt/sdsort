@@ -1,8 +1,8 @@
 import os
-from ast import AsyncFunctionDef, Attribute, Call, ClassDef, FunctionDef, Module, parse, walk
+from ast import AST, AsyncFunctionDef, Attribute, Call, ClassDef, FunctionDef, Module, parse, walk
 from collections import defaultdict
 from glob import glob
-from typing import Dict, Iterable, List, Optional, Tuple, Union
+from typing import Dict, Iterable, List, Optional, Protocol, Tuple, TypeGuard, Union
 
 import click
 
@@ -155,7 +155,7 @@ def _determine_line_range(method: FunDef, source_lines: List[str]) -> Tuple[int,
     start = method.lineno
     if len(method.decorator_list) > 0:
         start = min(d.lineno for d in method.decorator_list)
-    stop = max(n.lineno for n in walk(method) if hasattr(n, "lineno"))
+    stop = max(n.lineno for n in walk(method) if has_lineno(n))
 
     # Probe a bit further until we find an empty line or one with less indentation than the method body
     peek = source_lines[stop] if stop < len(source_lines) else ""
@@ -168,3 +168,11 @@ def _determine_line_range(method: FunDef, source_lines: List[str]) -> Tuple[int,
     # AST line numbers are 1-based. Subtract one from the start position to make it 0-based
     # The stop position is exclusive (making this a half-open range) so leave it as is.
     return start - 1, stop
+
+
+class HasLineNo(Protocol):
+    lineno: int
+
+
+def has_lineno(node: AST) -> TypeGuard[HasLineNo]:
+    return hasattr(node, "lineno")

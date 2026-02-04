@@ -2,19 +2,14 @@ SHELL := /bin/bash
 
 .PHONY: test
 
-isort:
-	poetry run isort sdsort test
+ruff:
+	poetry run ruff check --select I --fix
+	poetry run ruff format
 
-black:
-	poetry run black sdsort test --exclude ".*/test/cases/.*.py"
-
-lint:
-	poetry run flake8 sdsort test
-
-mypy:
-	poetry run mypy --show-error-codes sdsort/ test/
+pyright:
+	poetry run pyright
 
 test:
 	poetry run pytest test/
 
-iblmt: isort black lint mypy test
+rpt: ruff pyright test
