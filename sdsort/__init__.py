@@ -84,6 +84,33 @@ def _find_classes(syntax_tree: Module) -> Iterable[ClassDef]:
             yield node
 
 
+def _sort_top_level_functions(source_lines: List[str], syntax_tree: Module) -> List[str]:
+    """Sort top-level functions according to step-down rule."""
+    func_dict = _find_top_level_functions(syntax_tree)
+
+    if not func_dict:
+        return source_lines
+
+    barriers = _find_barriers(syntax_tree, func_dict)
+
+    # Find which functions are pinned (called at module level before their natural sort position)
+    pinned_funcs: set[str] = set()
+    for _, called_funcs in barriers:
+        pinned_funcs.update(called_funcs)
+
+    # Separate pinned and free functions
+    # Pinned functions stay in their original position relative to barriers
+    # Free functions are sorted together
+
+    if not barriers:
+        # Simple case: no barriers, sort all functions together
+        return _sort_functions_in_region(source_lines, syntax_tree, func_dict)
+
+    # Complex case: there are barriers
+    # Strategy: keep pinned functions before their barrier, sort free functions
+    return _sort_functions_with_barriers(source_lines, syntax_tree, func_dict, barriers, pinned_funcs)
+
+
 def _find_top_level_functions(syntax_tree: Module) -> Dict[str, FunDef]:
     return {
         node.name: node
@@ -115,33 +142,6 @@ def _find_barriers(syntax_tree: Module, functions: Dict[str, FunDef]) -> List[Tu
             barriers.append((node.lineno, called_funcs))
 
     return barriers
-
-
-def _sort_top_level_functions(source_lines: List[str], syntax_tree: Module) -> List[str]:
-    """Sort top-level functions according to step-down rule."""
-    func_dict = _find_top_level_functions(syntax_tree)
-
-    if not func_dict:
-        return source_lines
-
-    barriers = _find_barriers(syntax_tree, func_dict)
-
-    # Find which functions are pinned (called at module level before their natural sort position)
-    pinned_funcs: set[str] = set()
-    for _, called_funcs in barriers:
-        pinned_funcs.update(called_funcs)
-
-    # Separate pinned and free functions
-    # Pinned functions stay in their original position relative to barriers
-    # Free functions are sorted together
-
-    if not barriers:
-        # Simple case: no barriers, sort all functions together
-        return _sort_functions_in_region(source_lines, syntax_tree, func_dict)
-
-    # Complex case: there are barriers
-    # Strategy: keep pinned functions before their barrier, sort free functions
-    return _sort_functions_with_barriers(source_lines, syntax_tree, func_dict, barriers, pinned_funcs)
 
 
 def _sort_functions_in_region(
