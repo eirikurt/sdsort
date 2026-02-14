@@ -25,6 +25,7 @@ TEST_CASES_DIR = "test/cases"
         "function_decorator",
         "async_functions",
         "circular_functions",
+        "multiple_barriers",
     ],
 )
 def test_all_cases(test_case: str):
