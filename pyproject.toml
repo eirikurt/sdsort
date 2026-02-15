@@ -41,3 +41,6 @@ exclude = ["test/cases"]
 [tool.uv.build-backend]
 module-name = "sdsort"
 module-root = ""
+
+[tool.pytest.ini_options]
+testpaths = ["test"]

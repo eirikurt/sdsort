@@ -10,6 +10,6 @@ pyright:
 	uv run pyright
 
 test:
-	uv run pytest test/
+	uv run pytest
 
 rpt: ruff pyright test
