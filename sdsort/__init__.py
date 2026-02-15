@@ -1,4 +1,5 @@
 import os
+import time
 from ast import AST, AsyncFunctionDef, Attribute, Call, ClassDef, FunctionDef, Module, Name, parse, walk
 from collections import defaultdict
 from glob import glob
@@ -18,6 +19,7 @@ FunDef = Union[FunctionDef, AsyncFunctionDef]
 )
 @click.option("--check", is_flag=True, help="Don't write changes, just report if files would be re-arranged.")
 def main(paths: tuple[str, ...], check: bool):
+    start_time = time.monotonic()
     file_paths = _expand_file_paths(paths)
     modified_files: list[str] = []
     pristine_files: list[str] = []
@@ -45,6 +47,10 @@ def main(paths: tuple[str, ...], check: bool):
         )
     if len(modified_files) == 0 and len(pristine_files) == 0:
         click.secho("No python files found to format", fg="green")
+
+    elapsed = time.monotonic() - start_time
+    total_files = len(modified_files) + len(pristine_files)
+    click.secho(f"Done! Checked {total_files} file{'' if total_files == 1 else 's'} in {elapsed:.2f}s", dim=True)
 
     if check and len(modified_files) > 0:
         raise SystemExit(1)
