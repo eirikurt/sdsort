@@ -8,7 +8,9 @@ jobs:
   pypi-publish:
     name: Upload release to PyPI
     runs-on: ubuntu-latest
-    environment: release
+    environment:
+      name: release
+      url: https://pypi.org/p/sdsort
     permissions:
       id-token: write
     steps:
