@@ -108,7 +108,22 @@ def _sort_top_level_functions(source_lines: List[str], syntax_tree: Module) -> L
 
 
 def _find_top_level_functions(syntax_tree: Module) -> Dict[str, FunDef]:
-    return {node.name: node for node in syntax_tree.body if isinstance(node, (FunctionDef, AsyncFunctionDef))}
+    return {
+        node.name: node
+        for node in syntax_tree.body
+        if isinstance(node, (FunctionDef, AsyncFunctionDef)) and not _is_pytest_fixture(node)
+    }
+
+
+def _is_pytest_fixture(node: FunDef) -> bool:
+    """Check if a function is decorated with @pytest.fixture."""
+    for decorator in node.decorator_list:
+        target = decorator.func if isinstance(decorator, Call) else decorator
+        if isinstance(target, Name) and target.id == "fixture":
+            return True
+        if isinstance(target, Attribute) and target.attr == "fixture":
+            return True
+    return False
 
 
 def _find_barriers(syntax_tree: Module, functions: Dict[str, FunDef]) -> List[Tuple[int, set[str]]]:
