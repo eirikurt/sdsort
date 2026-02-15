@@ -26,6 +26,7 @@ TEST_CASES_DIR = "test/cases"
         "async_functions",
         "circular_functions",
         "multiple_barriers",
+        "pytest_fixtures",
     ],
 )
 def test_all_cases(test_case: str):
@@ -37,6 +38,8 @@ def test_all_cases(test_case: str):
     # Act
     actual_output = step_down_sort(input_file_path)
 
+    if actual_output is None:
+        actual_output = read_file(input_file_path)
     assert actual_output == expected_output
 
 

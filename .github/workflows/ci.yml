@@ -56,4 +56,4 @@ jobs:
         run: uv sync
 
       - name: Test
-        run: uv run pytest test/
+        run: uv run pytest
