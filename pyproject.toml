@@ -2,12 +2,18 @@
 name = "sdsort"
 version = "0.2.1"
 description = "Sorts functions and class methods according to the step-down rule"
-authors = [
-    { name = "Eiríkur Fannar Torfason", email = "eirikur.torfason@gmail.com" },
-]
+authors = [{ name = "Eiríkur Fannar Torfason", email = "eirikur.torfason@gmail.com" }]
 requires-python = ">= 3.13"
 readme = "README.md"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+]
 dependencies = ["click>=8.3.1"]
+
+[project.scripts]
+sdsort = "sdsort:main"
 
 [dependency-groups]
 dev = [
@@ -16,8 +22,9 @@ dev = [
     "pyright (>=1.1.408,<2.0.0)",
 ]
 
-[project.scripts]
-sdsort = "sdsort:main"
+[build-system]
+requires = ["uv_build>=0.9.20,<0.10.0"]
+build-backend = "uv_build"
 
 [tool.ruff]
 exclude = ["test/cases"]
@@ -28,6 +35,6 @@ target-version = "py314"
 include = ["sdsort", "test"]
 exclude = ["test/cases"]
 
-[build-system]
-requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
+[tool.uv.build-backend]
+module-name = "sdsort"
+module-root = ""
