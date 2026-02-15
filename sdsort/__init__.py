@@ -94,10 +94,10 @@ def _sort_top_level_functions(source_lines: List[str], syntax_tree: Module) -> L
     # Barriers (module-level code that calls functions) divide the file into zones.
     # Functions within each zone are sorted independently, ensuring that functions
     # called at module level remain defined before the barrier that calls them.
-    barrier_lines = sorted(line for line, _ in _find_barriers(syntax_tree, func_dict))
+    barrier_line_numbers = sorted(line_no for line_no, _ in _find_barriers(syntax_tree, func_dict))
 
     sorted_dict: Dict[str, FunDef] = {}
-    for zone_funcs in _group_by_zone(func_dict, source_lines, barrier_lines):
+    for zone_funcs in _group_by_zone(func_dict, source_lines, barrier_line_numbers):
         deps = _find_dependencies(zone_funcs, _function_call_target)
         zone_sorted: Dict[str, FunDef] = {}
         for name in zone_funcs:
@@ -135,7 +135,7 @@ def _find_barriers(syntax_tree: Module, functions: Dict[str, FunDef]) -> List[Tu
 
 
 def _group_by_zone(
-    func_dict: Dict[str, FunDef], source_lines: List[str], barrier_lines: List[int]
+    func_dict: Dict[str, FunDef], source_lines: List[str], barrier_line_numbers: List[int]
 ) -> Iterable[Dict[str, FunDef]]:
     """Group functions into zones separated by barrier lines.
 
@@ -143,13 +143,13 @@ def _group_by_zone(
     (or before the first / after the last). Functions within a zone can be freely
     reordered without crossing a barrier.
     """
-    zones: list[Dict[str, FunDef]] = [{} for _ in range(len(barrier_lines) + 1)]
+    zones: list[Dict[str, FunDef]] = [{} for _ in range(len(barrier_line_numbers) + 1)]
     for name, func in func_dict.items():
         func_start = _determine_line_range(func, source_lines)[0]
         # barrier_lines are 1-based (AST), func_start is 0-based — the off-by-one
         # means `<` is the correct comparison (a function at 0-based line N is before
         # a barrier at 1-based line N+1).
-        zone_idx = next((i for i, bl in enumerate(barrier_lines) if func_start < bl), len(barrier_lines))
+        zone_idx = next((i for i, bl in enumerate(barrier_line_numbers) if func_start < bl), len(barrier_line_numbers))
         zones[zone_idx][name] = func
     return [z for z in zones if z]
 
@@ -198,9 +198,6 @@ def _find_dependencies(
     get_call_target: Callable[[Call], Optional[str]],
 ) -> Dict[str, List[str]]:
     """Find dependencies between functions/methods based on call patterns.
-
-    For top-level functions, matches direct function() calls (via _function_call_target).
-    For methods, matches self.method() calls (via _method_call_target).
 
     Note: For top-level functions, decorators are not included as dependencies.
     Decorators must be defined before use (syntactic constraint), but for step-down
