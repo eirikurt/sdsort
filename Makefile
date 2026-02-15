@@ -3,13 +3,13 @@ SHELL := /bin/bash
 .PHONY: test
 
 ruff:
-	poetry run ruff check --select I --fix
-	poetry run ruff format
+	uv run ruff check --select I --fix
+	uv run ruff format
 
 pyright:
-	poetry run pyright
+	uv run pyright
 
 test:
-	poetry run pytest test/
+	uv run pytest test/
 
 rpt: ruff pyright test
