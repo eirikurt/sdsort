@@ -1,6 +1,6 @@
 [project]
 name = "sdsort"
-version = "0.2.0"
+version = "0.2.1"
 description = "Sorts functions and class methods according to the step-down rule"
 authors = [
     { name = "Eiríkur Fannar Torfason", email = "eirikur.torfason@gmail.com" },
