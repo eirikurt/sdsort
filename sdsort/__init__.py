@@ -149,7 +149,9 @@ def _group_by_zone(
         # barrier_lines are 1-based (AST), func_start is 0-based — the off-by-one
         # means `<` is the correct comparison (a function at 0-based line N is before
         # a barrier at 1-based line N+1).
-        zone_idx = next((i for i, bl in enumerate(barrier_line_numbers) if func_start < bl), len(barrier_line_numbers))
+        zone_idx = next(
+            (i for i, bl in enumerate(barrier_line_numbers) if func_start < bl), len(barrier_line_numbers)
+        )
         zones[zone_idx][name] = func
     return [z for z in zones if z]
 
@@ -160,18 +162,8 @@ def _rearrange_top_level_functions(
     sorted_dict: Dict[str, FunDef],
 ) -> List[str]:
     """Rearrange top-level code with sorted functions."""
-    result: List[str] = []
-    source_position = 0
-
-    for original, replacement in zip(func_dict.values(), sorted_dict.values()):
-        original_range = _determine_line_range(original, source_lines)
-        replacement_range = _determine_line_range(replacement, source_lines)
-
-        result.extend(source_lines[source_position : original_range[0]])
-        result.extend(source_lines[replacement_range[0] : replacement_range[1]])
-        source_position = original_range[1]
-
-    result.extend(source_lines[source_position:])
+    result, pos = _rearrange_functions(source_lines, func_dict, sorted_dict)
+    result.extend(source_lines[pos:])
     return result
 
 
@@ -248,21 +240,26 @@ def _rearrange_class_code(
     sorted_dict: Dict[str, FunDef],
     source_lines: List[str],
 ) -> List[str]:
-    source_position = class_def.lineno
-    result = []
-    for original_method, replacement_method in zip(method_dict.values(), sorted_dict.values()):
-        original_method_range = _determine_line_range(original_method, source_lines)
-        replacement_method_range = _determine_line_range(replacement_method, source_lines)
-
-        # Add everything, that hasn't been copied so far, up to where the original method starts
-        result.extend(source_lines[source_position : original_method_range[0]])
-
-        # Copy the replacement method
-        result.extend(source_lines[replacement_method_range[0] : replacement_method_range[1]])
-
-        # Move the position cursor to where the original method ended
-        source_position = original_method_range[1]
+    result, _ = _rearrange_functions(source_lines, method_dict, sorted_dict, start=class_def.lineno)
     return result
+
+
+def _rearrange_functions(
+    source_lines: List[str],
+    func_dict: Dict[str, FunDef],
+    sorted_dict: Dict[str, FunDef],
+    start: int = 0,
+) -> Tuple[List[str], int]:
+    """Rearrange source lines by swapping functions from their original positions to sorted positions."""
+    result: List[str] = []
+    source_position = start
+    for original, replacement in zip(func_dict.values(), sorted_dict.values()):
+        original_range = _determine_line_range(original, source_lines)
+        replacement_range = _determine_line_range(replacement, source_lines)
+        result.extend(source_lines[source_position : original_range[0]])
+        result.extend(source_lines[replacement_range[0] : replacement_range[1]])
+        source_position = original_range[1]
+    return result, source_position
 
 
 def _determine_line_range(method: FunDef, source_lines: List[str]) -> Tuple[int, int]:
