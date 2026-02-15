@@ -1,6 +1,6 @@
 [project]
 name = "sdsort"
-version = "0.2.1"
+version = "0.2.2"
 description = "Sorts functions and class methods according to the step-down rule"
 authors = [{ name = "Eiríkur Fannar Torfason", email = "eirikur.torfason@gmail.com" }]
 requires-python = ">= 3.10"
