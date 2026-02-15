@@ -266,6 +266,16 @@ def _determine_line_range(method: FunDef, source_lines: List[str]) -> Tuple[int,
     start = method.lineno
     if len(method.decorator_list) > 0:
         start = min(d.lineno for d in method.decorator_list)
+
+    # AST line numbers are 1-based. Subtract one from the start position to make it 0-based
+    start -= 1
+
+    # Check if there are any leading comments. If so, include them as well
+    peek = source_lines[start - 1] if start > 0 else ""
+    while peek.strip().startswith("#"):
+        start -= 1
+        peek = source_lines[start - 1] if start > 0 else ""
+
     stop = max(n.lineno for n in walk(method) if has_lineno(n))
 
     # Probe a bit further until we find an empty line or one with less indentation than the method body
@@ -276,9 +286,7 @@ def _determine_line_range(method: FunDef, source_lines: List[str]) -> Tuple[int,
         stop += 1
         peek = source_lines[stop] if stop < len(source_lines) else ""
 
-    # AST line numbers are 1-based. Subtract one from the start position to make it 0-based
-    # The stop position is exclusive (making this a half-open range) so leave it as is.
-    return start - 1, stop
+    return start, stop
 
 
 class HasLineNo(Protocol):

@@ -3,10 +3,13 @@ async def main():
     print(result)
 
 
+# Processes the data
+# ...in mysterious ways
 async def process_data():
     data = await fetch_data()
     return data.upper()
 
 
+# Fetches the data
 async def fetch_data():
     return "data"
