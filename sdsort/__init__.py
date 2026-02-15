@@ -1,8 +1,9 @@
 import os
+import time
 from ast import AST, AsyncFunctionDef, Attribute, Call, ClassDef, FunctionDef, Module, Name, parse, walk
 from collections import defaultdict
 from glob import glob
-from typing import Callable, Dict, Iterable, List, Optional, Protocol, Tuple, TypeGuard, Union
+from typing import Callable, Iterable, Optional, Protocol, TypeGuard, Union
 
 import click
 
@@ -16,19 +17,46 @@ FunDef = Union[FunctionDef, AsyncFunctionDef]
     type=click.Path(exists=True, file_okay=True, dir_okay=True, readable=True),
     is_eager=True,
 )
-def main(paths: Tuple[str, ...]):
+@click.option("--check", is_flag=True, help="Don't write changes, just report if files would be re-arranged.")
+def main(paths: tuple[str, ...], check: bool):
+    start_time = time.monotonic()
     file_paths = _expand_file_paths(paths)
+    modified_files: list[str] = []
+    pristine_files: list[str] = []
+
     for file_path in sorted(file_paths):
         modified_source = step_down_sort(file_path)
         if modified_source is not None:
-            with open(file_path, "w") as file:
-                file.write(modified_source)
-            click.echo(f"{file_path} is all sorted")
+            if not check:
+                with open(file_path, "w") as file:
+                    file.write(modified_source)
+            modified_files.append(file_path)
         else:
-            click.echo(f"{file_path} is unchanged")
+            pristine_files.append(file_path)
+
+    if len(modified_files) > 0:
+        if check:
+            click.secho("The following files would be re-arranged:", fg="yellow", bold=True)
+        else:
+            click.secho("Re-arranged the following files:", fg="yellow", bold=True)
+        for modified_file in modified_files:
+            click.echo(f"- {modified_file}")
+    if len(pristine_files) > 0:
+        click.secho(
+            f"{len(pristine_files)} file{'' if len(pristine_files) == 1 else 's'} left unchanged", fg="green"
+        )
+    if len(modified_files) == 0 and len(pristine_files) == 0:
+        click.secho("No python files found to format", fg="green")
+
+    elapsed = time.monotonic() - start_time
+    total_files = len(modified_files) + len(pristine_files)
+    click.secho(f"Done! Checked {total_files} file{'' if total_files == 1 else 's'} in {elapsed:.2f}s", dim=True)
+
+    if check and len(modified_files) > 0:
+        raise SystemExit(1)
 
 
-def _expand_file_paths(paths: Tuple[str, ...]) -> Iterable[str]:
+def _expand_file_paths(paths: tuple[str, ...]) -> Iterable[str]:
     file_paths = []
     for path in paths:
         if os.path.isdir(path):
@@ -51,7 +79,7 @@ def step_down_sort(python_file_path: str) -> Optional[str]:
     modified_tree = parse(modified_source)
 
     # Then, sort methods within classes
-    final_lines: List[str] = []
+    final_lines: list[str] = []
     for cls in _find_classes(modified_tree):
         # Copy everything, which hasn't been copied so far, up until the class def,
         final_lines.extend(modified_lines[len(final_lines) : cls.lineno])
@@ -84,7 +112,7 @@ def _find_classes(syntax_tree: Module) -> Iterable[ClassDef]:
             yield node
 
 
-def _sort_top_level_functions(source_lines: List[str], syntax_tree: Module) -> List[str]:
+def _sort_top_level_functions(source_lines: list[str], syntax_tree: Module) -> list[str]:
     """Sort top-level functions according to step-down rule."""
     func_dict = _find_top_level_functions(syntax_tree)
 
@@ -96,10 +124,10 @@ def _sort_top_level_functions(source_lines: List[str], syntax_tree: Module) -> L
     # called at module level remain defined before the barrier that calls them.
     barrier_line_numbers = sorted(line_no for line_no, _ in _find_barriers(syntax_tree, func_dict))
 
-    sorted_dict: Dict[str, FunDef] = {}
+    sorted_dict: dict[str, FunDef] = {}
     for zone_funcs in _group_by_zone(func_dict, source_lines, barrier_line_numbers):
         deps = _find_dependencies(zone_funcs, _function_call_target)
-        zone_sorted: Dict[str, FunDef] = {}
+        zone_sorted: dict[str, FunDef] = {}
         for name in zone_funcs:
             _depth_first_sort(name, zone_funcs, deps, zone_sorted, [])
         sorted_dict.update(zone_sorted)
@@ -107,7 +135,7 @@ def _sort_top_level_functions(source_lines: List[str], syntax_tree: Module) -> L
     return _rearrange_top_level_functions(source_lines, func_dict, sorted_dict)
 
 
-def _find_top_level_functions(syntax_tree: Module) -> Dict[str, FunDef]:
+def _find_top_level_functions(syntax_tree: Module) -> dict[str, FunDef]:
     return {
         node.name: node
         for node in syntax_tree.body
@@ -126,13 +154,13 @@ def _is_pytest_fixture(node: FunDef) -> bool:
     return False
 
 
-def _find_barriers(syntax_tree: Module, functions: Dict[str, FunDef]) -> List[Tuple[int, set[str]]]:
+def _find_barriers(syntax_tree: Module, functions: dict[str, FunDef]) -> list[tuple[int, set[str]]]:
     """Find module-level statements that call functions directly.
 
     Returns a list of (line_number, set of function names called) for each barrier.
     A barrier is any non-function-def statement that invokes a function.
     """
-    barriers: List[Tuple[int, set[str]]] = []
+    barriers: list[tuple[int, set[str]]] = []
     for node in syntax_tree.body:
         if isinstance(node, (FunctionDef, AsyncFunctionDef, ClassDef)):
             continue
@@ -150,15 +178,15 @@ def _find_barriers(syntax_tree: Module, functions: Dict[str, FunDef]) -> List[Tu
 
 
 def _group_by_zone(
-    func_dict: Dict[str, FunDef], source_lines: List[str], barrier_line_numbers: List[int]
-) -> Iterable[Dict[str, FunDef]]:
+    func_dict: dict[str, FunDef], source_lines: list[str], barrier_line_numbers: list[int]
+) -> Iterable[dict[str, FunDef]]:
     """Group functions into zones separated by barrier lines.
 
     Each zone contains the functions that appear between two consecutive barriers
     (or before the first / after the last). Functions within a zone can be freely
     reordered without crossing a barrier.
     """
-    zones: list[Dict[str, FunDef]] = [{} for _ in range(len(barrier_line_numbers) + 1)]
+    zones: list[dict[str, FunDef]] = [{} for _ in range(len(barrier_line_numbers) + 1)]
     for name, func in func_dict.items():
         func_start = _determine_line_range(func, source_lines)[0]
         # barrier_lines are 1-based (AST), func_start is 0-based — the off-by-one
@@ -172,17 +200,17 @@ def _group_by_zone(
 
 
 def _rearrange_top_level_functions(
-    source_lines: List[str],
-    func_dict: Dict[str, FunDef],
-    sorted_dict: Dict[str, FunDef],
-) -> List[str]:
+    source_lines: list[str],
+    func_dict: dict[str, FunDef],
+    sorted_dict: dict[str, FunDef],
+) -> list[str]:
     """Rearrange top-level code with sorted functions."""
     result, pos = _rearrange_functions(source_lines, func_dict, sorted_dict)
     result.extend(source_lines[pos:])
     return result
 
 
-def _sort_methods_within_class(source_lines: List[str], class_def: ClassDef) -> List[str]:
+def _sort_methods_within_class(source_lines: list[str], class_def: ClassDef) -> list[str]:
     # TODO: recursively sort methods within nested classes?
 
     # Find methods
@@ -192,7 +220,7 @@ def _sort_methods_within_class(source_lines: List[str], class_def: ClassDef) -> 
     dependencies = _find_dependencies(method_dict, _method_call_target)
 
     # Re-order methods as needed
-    sorted_dict: Dict[str, FunDef] = {}
+    sorted_dict: dict[str, FunDef] = {}
     for method_name in method_dict:
         _depth_first_sort(method_name, method_dict, dependencies, sorted_dict, [])
 
@@ -201,16 +229,16 @@ def _sort_methods_within_class(source_lines: List[str], class_def: ClassDef) -> 
 
 
 def _find_dependencies(
-    funcs: Dict[str, FunDef],
+    funcs: dict[str, FunDef],
     get_call_target: Callable[[Call], Optional[str]],
-) -> Dict[str, List[str]]:
+) -> dict[str, list[str]]:
     """Find dependencies between functions/methods based on call patterns.
 
     Note: For top-level functions, decorators are not included as dependencies.
     Decorators must be defined before use (syntactic constraint), but for step-down
     ordering, the decorated function should come before its decorator.
     """
-    dependencies: Dict[str, List[str]] = defaultdict(list)
+    dependencies: dict[str, list[str]] = defaultdict(list)
     for func in funcs.values():
         for node in walk(func):
             if isinstance(node, Call):
@@ -232,10 +260,10 @@ def _function_call_target(node: Call) -> Optional[str]:
 
 def _depth_first_sort(
     current_method_name: str,
-    method_dict: Dict[str, FunDef],
-    dependencies: Dict[str, List[str]],
-    sorted_dict: Dict[str, FunDef],
-    path: List[str],
+    method_dict: dict[str, FunDef],
+    dependencies: dict[str, list[str]],
+    sorted_dict: dict[str, FunDef],
+    path: list[str],
 ):
     path.append(current_method_name)
 
@@ -251,22 +279,22 @@ def _depth_first_sort(
 
 def _rearrange_class_code(
     class_def: ClassDef,
-    method_dict: Dict[str, FunDef],
-    sorted_dict: Dict[str, FunDef],
-    source_lines: List[str],
-) -> List[str]:
+    method_dict: dict[str, FunDef],
+    sorted_dict: dict[str, FunDef],
+    source_lines: list[str],
+) -> list[str]:
     result, _ = _rearrange_functions(source_lines, method_dict, sorted_dict, start=class_def.lineno)
     return result
 
 
 def _rearrange_functions(
-    source_lines: List[str],
-    func_dict: Dict[str, FunDef],
-    sorted_dict: Dict[str, FunDef],
+    source_lines: list[str],
+    func_dict: dict[str, FunDef],
+    sorted_dict: dict[str, FunDef],
     start: int = 0,
-) -> Tuple[List[str], int]:
+) -> tuple[list[str], int]:
     """Rearrange source lines by swapping functions from their original positions to sorted positions."""
-    result: List[str] = []
+    result: list[str] = []
     source_position = start
     for original, replacement in zip(func_dict.values(), sorted_dict.values()):
         original_range = _determine_line_range(original, source_lines)
@@ -277,7 +305,7 @@ def _rearrange_functions(
     return result, source_position
 
 
-def _determine_line_range(method: FunDef, source_lines: List[str]) -> Tuple[int, int]:
+def _determine_line_range(method: FunDef, source_lines: list[str]) -> tuple[int, int]:
     start = method.lineno
     if len(method.decorator_list) > 0:
         start = min(d.lineno for d in method.decorator_list)

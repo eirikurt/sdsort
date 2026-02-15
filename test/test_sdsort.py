@@ -93,6 +93,40 @@ def test_when_directory_is_provided_then_all_python_files_in_it_are_sorted():
     # TODO: assert that other files in directory were not modified?
 
 
+def test_check_flag_reports_unsorted_files_without_modifying_them():
+    # Arrange
+    file_to_sort = f"{TEST_CASES_DIR}/comments.in.py"
+    runner = CliRunner()
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        target_path = shutil.copy(file_to_sort, temp_dir)
+        original_content = read_file(target_path)
+
+        # Act
+        result = runner.invoke(main, ["--check", target_path])
+
+        # Assert
+        assert result.exit_code == 1, "Exit code should be 1 when files need sorting"
+        assert "would be re-arranged" in result.output
+        assert read_file(target_path) == original_content, "File should not be modified"
+
+
+def test_check_flag_exits_cleanly_when_files_are_already_sorted():
+    # Arrange
+    already_sorted_file = f"{TEST_CASES_DIR}/comments.out.py"
+    runner = CliRunner()
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        target_path = shutil.copy(already_sorted_file, temp_dir)
+
+        # Act
+        result = runner.invoke(main, ["--check", target_path])
+
+        # Assert
+        assert result.exit_code == 0, "Exit code should be 0 when files are already sorted"
+        assert "would be re-arranged" not in result.output
+
+
 def read_file(file_path: str) -> str:
     with open(file_path) as file:
         return file.read()
