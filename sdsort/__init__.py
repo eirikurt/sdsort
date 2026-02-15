@@ -26,9 +26,18 @@ def main(paths: tuple[str, ...]):
         if modified_source is not None:
             with open(file_path, "w") as file:
                 file.write(modified_source)
-            click.echo(f"{file_path} is all sorted")
+            modified_files.append(file_path)
         else:
-            click.echo(f"{file_path} is unchanged")
+            pristine_files.append(file_path)
+    
+    if len(modified_files) > 0:
+        click.echo("Re-arranged the following files:")
+        for modified_file in modified_files:
+            click.echo(f"- {modified_file}")
+    if len(pristine_files) > 0:
+        click.echo(f"{len(pristine_files)} file left unchanged")
+    if len(modified_files) == 0 and len(pristine_files) == 0:
+        click.echo("No python files found to format")
 
 
 def _expand_file_paths(paths: tuple[str, ...]) -> Iterable[str]:
