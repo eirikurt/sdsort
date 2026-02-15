@@ -34,15 +34,17 @@ def main(paths: tuple[str, ...], check: bool):
 
     if len(modified_files) > 0:
         if check:
-            click.echo("The following files would be re-arranged:")
+            click.secho("The following files would be re-arranged:", fg="yellow", bold=True)
         else:
-            click.echo("Re-arranged the following files:")
+            click.secho("Re-arranged the following files:", fg="yellow", bold=True)
         for modified_file in modified_files:
             click.echo(f"- {modified_file}")
     if len(pristine_files) > 0:
-        click.echo(f"{len(pristine_files)} file left unchanged")
+        click.secho(
+            f"{len(pristine_files)} file{'' if len(pristine_files) == 1 else 's'} left unchanged", fg="green"
+        )
     if len(modified_files) == 0 and len(pristine_files) == 0:
-        click.echo("No python files found to format")
+        click.secho("No python files found to format", fg="green")
 
     if check and len(modified_files) > 0:
         raise SystemExit(1)
