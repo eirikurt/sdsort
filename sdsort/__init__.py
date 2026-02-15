@@ -1,8 +1,8 @@
 import os
-from ast import AST, AsyncFunctionDef, Attribute, Call, ClassDef, FunctionDef, Module, parse, walk
+from ast import AST, AsyncFunctionDef, Attribute, Call, ClassDef, FunctionDef, Module, Name, parse, walk
 from collections import defaultdict
 from glob import glob
-from typing import Dict, Iterable, List, Optional, Protocol, Tuple, TypeGuard, Union
+from typing import Callable, Dict, Iterable, List, Optional, Protocol, Tuple, TypeGuard, Union
 
 import click
 
@@ -43,19 +43,27 @@ def step_down_sort(python_file_path: str) -> Optional[str]:
     syntax_tree = parse(source, filename=python_file_path)
     source_lines = source.splitlines()
 
-    modified_lines: List[str] = []
-    for cls in _find_classes(syntax_tree):
+    # First, sort top-level functions
+    modified_lines = _sort_top_level_functions(source_lines, syntax_tree)
+
+    # Re-parse to get updated line numbers for class sorting
+    modified_source = "\n".join(modified_lines) + "\n"
+    modified_tree = parse(modified_source)
+
+    # Then, sort methods within classes
+    final_lines: List[str] = []
+    for cls in _find_classes(modified_tree):
         # Copy everything, which hasn't been copied so far, up until the class def,
-        modified_lines.extend(source_lines[len(modified_lines) : cls.lineno])
+        final_lines.extend(modified_lines[len(final_lines) : cls.lineno])
 
         # Copy class after sorting its methods
-        modified_lines.extend(_sort_methods_within_class(source_lines, cls))
+        final_lines.extend(_sort_methods_within_class(modified_lines, cls))
 
     # Copy remainder of file
-    modified_lines.extend(source_lines[len(modified_lines) :])
+    final_lines.extend(modified_lines[len(final_lines) :])
 
-    if source_lines != modified_lines:
-        return "\n".join(modified_lines) + "\n"
+    if source_lines != final_lines:
+        return "\n".join(final_lines) + "\n"
     else:
         return None
 
@@ -76,18 +84,97 @@ def _find_classes(syntax_tree: Module) -> Iterable[ClassDef]:
             yield node
 
 
+def _sort_top_level_functions(source_lines: List[str], syntax_tree: Module) -> List[str]:
+    """Sort top-level functions according to step-down rule."""
+    func_dict = _find_top_level_functions(syntax_tree)
+
+    if not func_dict:
+        return source_lines
+
+    # Barriers (module-level code that calls functions) divide the file into zones.
+    # Functions within each zone are sorted independently, ensuring that functions
+    # called at module level remain defined before the barrier that calls them.
+    barrier_line_numbers = sorted(line_no for line_no, _ in _find_barriers(syntax_tree, func_dict))
+
+    sorted_dict: Dict[str, FunDef] = {}
+    for zone_funcs in _group_by_zone(func_dict, source_lines, barrier_line_numbers):
+        deps = _find_dependencies(zone_funcs, _function_call_target)
+        zone_sorted: Dict[str, FunDef] = {}
+        for name in zone_funcs:
+            _depth_first_sort(name, zone_funcs, deps, zone_sorted, [])
+        sorted_dict.update(zone_sorted)
+
+    return _rearrange_top_level_functions(source_lines, func_dict, sorted_dict)
+
+
+def _find_top_level_functions(syntax_tree: Module) -> Dict[str, FunDef]:
+    return {node.name: node for node in syntax_tree.body if isinstance(node, (FunctionDef, AsyncFunctionDef))}
+
+
+def _find_barriers(syntax_tree: Module, functions: Dict[str, FunDef]) -> List[Tuple[int, set[str]]]:
+    """Find module-level statements that call functions directly.
+
+    Returns a list of (line_number, set of function names called) for each barrier.
+    A barrier is any non-function-def statement that invokes a function.
+    """
+    barriers: List[Tuple[int, set[str]]] = []
+    for node in syntax_tree.body:
+        if isinstance(node, (FunctionDef, AsyncFunctionDef, ClassDef)):
+            continue
+
+        called_funcs: set[str] = set()
+        for child in walk(node):
+            if isinstance(child, Call) and isinstance(child.func, Name):
+                if child.func.id in functions:
+                    called_funcs.add(child.func.id)
+
+        if called_funcs:
+            barriers.append((node.lineno, called_funcs))
+
+    return barriers
+
+
+def _group_by_zone(
+    func_dict: Dict[str, FunDef], source_lines: List[str], barrier_line_numbers: List[int]
+) -> Iterable[Dict[str, FunDef]]:
+    """Group functions into zones separated by barrier lines.
+
+    Each zone contains the functions that appear between two consecutive barriers
+    (or before the first / after the last). Functions within a zone can be freely
+    reordered without crossing a barrier.
+    """
+    zones: list[Dict[str, FunDef]] = [{} for _ in range(len(barrier_line_numbers) + 1)]
+    for name, func in func_dict.items():
+        func_start = _determine_line_range(func, source_lines)[0]
+        # barrier_lines are 1-based (AST), func_start is 0-based — the off-by-one
+        # means `<` is the correct comparison (a function at 0-based line N is before
+        # a barrier at 1-based line N+1).
+        zone_idx = next(
+            (i for i, bl in enumerate(barrier_line_numbers) if func_start < bl), len(barrier_line_numbers)
+        )
+        zones[zone_idx][name] = func
+    return [z for z in zones if z]
+
+
+def _rearrange_top_level_functions(
+    source_lines: List[str],
+    func_dict: Dict[str, FunDef],
+    sorted_dict: Dict[str, FunDef],
+) -> List[str]:
+    """Rearrange top-level code with sorted functions."""
+    result, pos = _rearrange_functions(source_lines, func_dict, sorted_dict)
+    result.extend(source_lines[pos:])
+    return result
+
+
 def _sort_methods_within_class(source_lines: List[str], class_def: ClassDef) -> List[str]:
     # TODO: recursively sort methods within nested classes?
 
     # Find methods
-    method_dict = {
-        node.name: node
-        for node in class_def.body
-        if isinstance(node, FunctionDef) or isinstance(node, AsyncFunctionDef)
-    }
+    method_dict = {node.name: node for node in class_def.body if isinstance(node, (FunctionDef, AsyncFunctionDef))}
 
     # Build dependency graph among methods
-    dependencies = _find_dependencies(method_dict)
+    dependencies = _find_dependencies(method_dict, _method_call_target)
 
     # Re-order methods as needed
     sorted_dict: Dict[str, FunDef] = {}
@@ -98,15 +185,34 @@ def _sort_methods_within_class(source_lines: List[str], class_def: ClassDef) -> 
     return _rearrange_class_code(class_def, method_dict, sorted_dict, source_lines)
 
 
-def _find_dependencies(methods: Dict[str, FunDef]) -> Dict[str, List[str]]:
+def _find_dependencies(
+    funcs: Dict[str, FunDef],
+    get_call_target: Callable[[Call], Optional[str]],
+) -> Dict[str, List[str]]:
+    """Find dependencies between functions/methods based on call patterns.
+
+    Note: For top-level functions, decorators are not included as dependencies.
+    Decorators must be defined before use (syntactic constraint), but for step-down
+    ordering, the decorated function should come before its decorator.
+    """
     dependencies: Dict[str, List[str]] = defaultdict(list)
-    for method in methods.values():
-        for node in walk(method):
-            if isinstance(node, Call) and isinstance(node.func, Attribute):
-                target = node.func.attr
-                if target in methods and target not in dependencies[method.name]:
-                    dependencies[method.name].append(target)
+    for func in funcs.values():
+        for node in walk(func):
+            if isinstance(node, Call):
+                target = get_call_target(node)
+                if target is not None and target in funcs and target not in dependencies[func.name]:
+                    dependencies[func.name].append(target)
     return dependencies
+
+
+def _method_call_target(node: Call) -> Optional[str]:
+    """Extract target name from self.method() calls."""
+    return node.func.attr if isinstance(node.func, Attribute) else None
+
+
+def _function_call_target(node: Call) -> Optional[str]:
+    """Extract target name from direct function() calls."""
+    return node.func.id if isinstance(node.func, Name) else None
 
 
 def _depth_first_sort(
@@ -134,21 +240,26 @@ def _rearrange_class_code(
     sorted_dict: Dict[str, FunDef],
     source_lines: List[str],
 ) -> List[str]:
-    source_position = class_def.lineno
-    result = []
-    for original_method, replacement_method in zip(method_dict.values(), sorted_dict.values()):
-        original_method_range = _determine_line_range(original_method, source_lines)
-        replacement_method_range = _determine_line_range(replacement_method, source_lines)
-
-        # Add everything, that hasn't been copied so far, up to where the original method starts
-        result.extend(source_lines[source_position : original_method_range[0]])
-
-        # Copy the replacement method
-        result.extend(source_lines[replacement_method_range[0] : replacement_method_range[1]])
-
-        # Move the position cursor to where the original method ended
-        source_position = original_method_range[1]
+    result, _ = _rearrange_functions(source_lines, method_dict, sorted_dict, start=class_def.lineno)
     return result
+
+
+def _rearrange_functions(
+    source_lines: List[str],
+    func_dict: Dict[str, FunDef],
+    sorted_dict: Dict[str, FunDef],
+    start: int = 0,
+) -> Tuple[List[str], int]:
+    """Rearrange source lines by swapping functions from their original positions to sorted positions."""
+    result: List[str] = []
+    source_position = start
+    for original, replacement in zip(func_dict.values(), sorted_dict.values()):
+        original_range = _determine_line_range(original, source_lines)
+        replacement_range = _determine_line_range(replacement, source_lines)
+        result.extend(source_lines[source_position : original_range[0]])
+        result.extend(source_lines[replacement_range[0] : replacement_range[1]])
+        source_position = original_range[1]
+    return result, source_position
 
 
 def _determine_line_range(method: FunDef, source_lines: List[str]) -> Tuple[int, int]:
