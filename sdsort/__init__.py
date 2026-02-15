@@ -16,7 +16,8 @@ FunDef = Union[FunctionDef, AsyncFunctionDef]
     type=click.Path(exists=True, file_okay=True, dir_okay=True, readable=True),
     is_eager=True,
 )
-def main(paths: tuple[str, ...]):
+@click.option("--check", is_flag=True, help="Don't write changes, just report if files would be re-arranged.")
+def main(paths: tuple[str, ...], check: bool):
     file_paths = _expand_file_paths(paths)
     modified_files: list[str] = []
     pristine_files: list[str] = []
@@ -24,20 +25,27 @@ def main(paths: tuple[str, ...]):
     for file_path in sorted(file_paths):
         modified_source = step_down_sort(file_path)
         if modified_source is not None:
-            with open(file_path, "w") as file:
-                file.write(modified_source)
+            if not check:
+                with open(file_path, "w") as file:
+                    file.write(modified_source)
             modified_files.append(file_path)
         else:
             pristine_files.append(file_path)
-    
+
     if len(modified_files) > 0:
-        click.echo("Re-arranged the following files:")
+        if check:
+            click.echo("The following files would be re-arranged:")
+        else:
+            click.echo("Re-arranged the following files:")
         for modified_file in modified_files:
             click.echo(f"- {modified_file}")
     if len(pristine_files) > 0:
         click.echo(f"{len(pristine_files)} file left unchanged")
     if len(modified_files) == 0 and len(pristine_files) == 0:
         click.echo("No python files found to format")
+
+    if check and len(modified_files) > 0:
+        raise SystemExit(1)
 
 
 def _expand_file_paths(paths: tuple[str, ...]) -> Iterable[str]:
