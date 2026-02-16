@@ -12,4 +12,7 @@ pyright:
 test:
 	uv run pytest
 
+testx:
+	uv run pytest -x --pdb
+
 rpt: ruff pyright test
