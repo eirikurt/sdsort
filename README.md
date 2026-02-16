@@ -1,7 +1,7 @@
 # sdsort
 
 Sorts **top-level functions** and **class methods** in Python files according to the step-down rule, as described in [Robert C. Martin's](https://en.wikipedia.org/wiki/Robert_C._Martin) [Clean Code](https://www.oreilly.com/library/view/clean-code-a/9780136083238/).
-More concretely, functions and methods are ordered in a depth-first-traversal order of the dependency tree, so higher-level code appears before the lower-level code it calls.
+More concretely, functions and methods are ordered in a depth-first-traversal order of the dependency tree, so higher-level code appears before lower-level code.
 
 ## Installation
 
