@@ -1,5 +1,9 @@
 import pytest
 
+def do_stuff():
+    print("doing")
+
+
 @pytest.fixture
 def prepare_stuff():
     def _inner():
@@ -7,6 +11,8 @@ def prepare_stuff():
     
     return _inner
 
+
 def test_something(prepare_stuff):
     x = prepare_stuff()
+    do_stuff()
     assert x > 0
