@@ -7,6 +7,12 @@ def prepare_stuff():
     
     return _inner
 
+
 def test_something(prepare_stuff):
     x = prepare_stuff()
+    do_stuff()
     assert x > 0
+
+
+def do_stuff():
+    print("doing")
