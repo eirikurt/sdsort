@@ -271,7 +271,7 @@ def _rearrange_top_level_functions(
 
     for orig_name in func_dict:
         orig_start, orig_stop = ranges[orig_name]
-        result.extend(source_lines[pos : orig_start])  # filler is always emitted in original order
+        result.extend(source_lines[pos:orig_start])  # filler is always emitted in original order
         pos = orig_stop + 1
 
         if sort_idx >= len(sorted_names) or orig_name != sorted_names[sort_idx]:
@@ -418,12 +418,6 @@ def _determine_line_range(method: FunDef, source_lines: list[str]) -> tuple[int,
     while peek.strip().startswith("#"):
         start -= 1
         peek = source_lines[start - 1] if start > 0 else ""
-
-    # Include leading whitespace, at least up to a point?
-    # peek = source_lines[start - 1] if start > 0 else "nope"
-    # while len(peek.strip()) == 0:
-    #    start -= 1
-    #    peek = source_lines[start - 1] if start > 0 else "nope"
 
     stop = max(n.lineno for n in walk(method) if has_lineno(n))
 
