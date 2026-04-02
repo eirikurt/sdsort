@@ -2,7 +2,6 @@ import os
 import time
 from ast import AST, AsyncFunctionDef, Attribute, Call, ClassDef, FunctionDef, Module, Name, parse, walk
 from collections import defaultdict
-from dataclasses import dataclass
 from glob import glob
 from typing import Callable, Iterable, Optional, Protocol, TypeGuard, Union
 
@@ -253,63 +252,43 @@ def _group_by_zone(
     return [z for z in zones if z]
 
 
-@dataclass
-class Segment:
-    start: int
-    stop: int
-
-    @property
-    def is_valid(self):
-        return self.stop >= self.start
-
-
-@dataclass
-class FunctionSegment(Segment):
-    name: str
-    node: FunDef
-
-
 def _rearrange_top_level_functions(
     source_lines: list[str],
     func_dict: dict[str, FunDef],
     sorted_dict: dict[str, FunDef],
 ) -> list[str]:
-    function_ranges = [_determine_line_range(f, source_lines) for f in func_dict.values()]
-    function_segments = {
-        name: FunctionSegment(start=start, stop=stop, name=name, node=node)
-        for ((name, node), (start, stop)) in zip(func_dict.items(), function_ranges)
-    }
-    all_segments: list[Segment] = []
-    for fun_seg in function_segments.values():
-        filler = Segment(start=0 if len(all_segments) == 0 else all_segments[-1].stop + 1, stop=fun_seg.start - 1)
-        if filler.is_valid:
-            all_segments.append(filler)
-        all_segments.append(fun_seg)
-    filler = Segment(start=all_segments[-1].stop + 1, stop=len(source_lines) - 1)
-    if filler.is_valid:
-        all_segments.append(filler)
+    # Pre-compute all line ranges up front.
+    ranges = {name: _determine_line_range(node, source_lines) for name, node in func_dict.items()}
+
+    def lines_of(name: str) -> list[str]:
+        start, stop = ranges[name]
+        return source_lines[start : stop + 1]
 
     result: list[str] = []
+    pos = 0
+    sorted_names = list(sorted_dict.keys())
+    sort_idx = 0
 
-    def append_segment(segment: Segment):
-        result.extend(source_lines[segment.start : segment.stop + 1])
+    for orig_name in func_dict:
+        orig_start, orig_stop = ranges[orig_name]
+        result.extend(source_lines[pos : orig_start])  # filler is always emitted in original order
+        pos = orig_stop + 1
 
-    sorted_function_stack = list(reversed(sorted_dict.keys()))
-    for segment in all_segments:
-        if isinstance(segment, FunctionSegment):
-            if segment.name == sorted_function_stack[-1]:
-                append_segment(segment)
-                sorted_function_stack.pop()
-                prev = segment
-                while (
-                    len(sorted_function_stack) > 0
-                    and (past_segment := function_segments[sorted_function_stack[-1]]).start < prev.start
-                ):
-                    append_segment(past_segment)
-                    sorted_function_stack.pop()
-        else:
-            append_segment(segment)
+        if sort_idx >= len(sorted_names) or orig_name != sorted_names[sort_idx]:
+            # The next sorted function hasn't reached its trigger slot yet; skip this slot.
+            # Functions emitted early by the while-loop below also land here.
+            continue
 
+        result.extend(lines_of(sorted_names[sort_idx]))
+        sort_idx += 1
+
+        # A function that originally appeared before this slot should follow it immediately,
+        # because its own slot was already passed (and skipped) earlier in the walk.
+        while sort_idx < len(sorted_names) and ranges[sorted_names[sort_idx]][0] < orig_start:
+            result.extend(lines_of(sorted_names[sort_idx]))
+            sort_idx += 1
+
+    result.extend(source_lines[pos:])  # trailing content
     return result
 
 
