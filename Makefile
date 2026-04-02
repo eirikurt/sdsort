@@ -13,6 +13,6 @@ test:
 	uv run pytest
 
 testx:
-	uv run pytest -x --pdb
+	uv run pytest -x --pdb -vv
 
 rpt: ruff pyright test

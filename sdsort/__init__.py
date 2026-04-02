@@ -316,22 +316,24 @@ def _find_dependencies(
 ) -> dict[str, list[str]]:
     """Find dependencies between functions/methods based on call patterns.
 
-    Note: For top-level functions, decorators are not included as dependencies.
-    Decorators must be defined before use (syntactic constraint), but for step-down
-    ordering, the decorated function should come before its decorator.
+    Note: decorator_list is excluded from the walk. Decorator arguments are evaluated
+    at definition time, so any functions they call must already be defined before the
+    decorated function — treating them as step-down dependencies would invert that.
     """
     dependencies: dict[str, list[str]] = defaultdict(list)
     for func in funcs.values():
-        for node in walk(func):
-            if isinstance(node, Call):
-                target = get_call_target(node)
-                if (
-                    target is not None
-                    and target in funcs
-                    and not _is_pytest_fixture(funcs[target])
-                    and target not in dependencies[func.name]
-                ):
-                    dependencies[func.name].append(target)
+        subtrees = [*func.body, func.args, *([] if func.returns is None else [func.returns])]
+        for subtree in subtrees:
+            for node in walk(subtree):
+                if isinstance(node, Call):
+                    target = get_call_target(node)
+                    if (
+                        target is not None
+                        and target in funcs
+                        and not _is_pytest_fixture(funcs[target])
+                        and target not in dependencies[func.name]
+                    ):
+                        dependencies[func.name].append(target)
     return dependencies
 
 
