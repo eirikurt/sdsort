@@ -1,5 +1,6 @@
 import pytest
 
+
 @pytest.fixture
 def prepare_stuff():
     def _inner():
