@@ -27,6 +27,7 @@ TEST_CASES_DIR = "test/cases"
         "circular_functions",
         "multiple_barriers",
         "pytest_fixtures",
+        "sandwiched_decorator",
     ],
 )
 def test_all_cases(test_case: str):
