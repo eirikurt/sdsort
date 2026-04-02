@@ -91,9 +91,77 @@ def step_down_sort(python_file_path: str) -> Optional[str]:
     final_lines.extend(modified_lines[len(final_lines) :])
 
     if source_lines != final_lines:
-        return "\n".join(final_lines) + "\n"
+        return _normalize_blank_lines(final_lines)
     else:
         return None
+
+
+def _normalize_blank_lines(lines: list[str]) -> str:
+    """Normalize blank lines per PEP 8:
+    - 2 blank lines before top-level function/class definitions
+    - 1 blank line between methods in a class (0 before the first)
+    """
+    # Collect 0-based line indices where PEP 8 spacing rules apply
+    # Maps line_index -> required number of preceding blank lines
+    required_blanks: dict[int, int] = {}
+    tree = parse("\n".join(lines) + "\n")
+
+    for node in tree.body:
+        if isinstance(node, (FunctionDef, AsyncFunctionDef, ClassDef)):
+            target = min((d.lineno for d in node.decorator_list), default=node.lineno)
+            # Scan backwards past any leading comments so the 2 blank lines are
+            # inserted before the comment block, not between the comment and the def.
+            marker = target - 1  # 0-based index of the def/decorator line
+            while marker > 0 and lines[marker - 1].strip().startswith("#"):
+                marker -= 1
+            required_blanks[marker] = 2
+
+    for node in tree.body:
+        if not isinstance(node, ClassDef):
+            continue
+        methods = [n for n in node.body if isinstance(n, (FunctionDef, AsyncFunctionDef))]
+        for i, method in enumerate(methods):
+            target = min((d.lineno for d in method.decorator_list), default=method.lineno)
+            if i == 0:
+                # For the first method, preserve existing blank lines (up to 1) rather
+                # than forcing 0 — this allows a blank between class variables and the
+                # first method when the author already wrote one.
+                preceding_blanks = 0
+                for line_idx in range(target - 2, -1, -1):
+                    if lines[line_idx].strip() == "":
+                        preceding_blanks += 1
+                    else:
+                        break
+                required_blanks[target - 1] = min(preceding_blanks, 1)
+            else:
+                required_blanks[target - 1] = 1  # 0-based
+
+    # Walk lines, stripping existing blank lines before def sites
+    # and injecting the required number
+    result: list[str] = []
+    i = 0
+    while i < len(lines):
+        if i in required_blanks:
+            # Strip any blank lines already accumulated at the end of result
+            while result and result[-1].strip() == "":
+                result.pop()
+            # Inject the required blank lines
+            result.extend([""] * required_blanks[i])
+        line = lines[i]
+        # Cap consecutive blank lines at 2 (PEP 8) for lines not controlled by required_blanks
+        if (
+            i not in required_blanks
+            and line.strip() == ""
+            and len(result) >= 2
+            and result[-1].strip() == ""
+            and result[-2].strip() == ""
+        ):
+            i += 1
+            continue
+        result.append(line)
+        i += 1
+
+    return "\n".join(result).strip() + "\n"
 
 
 def _read_file(file_path: str) -> str:
@@ -189,9 +257,38 @@ def _rearrange_top_level_functions(
     func_dict: dict[str, FunDef],
     sorted_dict: dict[str, FunDef],
 ) -> list[str]:
-    """Rearrange top-level code with sorted functions."""
-    result, pos = _rearrange_functions(source_lines, func_dict, sorted_dict)
-    result.extend(source_lines[pos:])
+    # Pre-compute all line ranges up front.
+    ranges = {name: _determine_line_range(node, source_lines) for name, node in func_dict.items()}
+
+    def lines_of(name: str) -> list[str]:
+        start, stop = ranges[name]
+        return source_lines[start : stop + 1]
+
+    result: list[str] = []
+    pos = 0
+    sorted_names = list(sorted_dict.keys())
+    sort_idx = 0
+
+    for orig_name in func_dict:
+        orig_start, orig_stop = ranges[orig_name]
+        result.extend(source_lines[pos:orig_start])  # filler is always emitted in original order
+        pos = orig_stop + 1
+
+        if sort_idx >= len(sorted_names) or orig_name != sorted_names[sort_idx]:
+            # The next sorted function hasn't reached its trigger slot yet; skip this slot.
+            # Functions emitted early by the while-loop below also land here.
+            continue
+
+        result.extend(lines_of(sorted_names[sort_idx]))
+        sort_idx += 1
+
+        # A function that originally appeared before this slot should follow it immediately,
+        # because its own slot was already passed (and skipped) earlier in the walk.
+        while sort_idx < len(sorted_names) and ranges[sorted_names[sort_idx]][0] < orig_start:
+            result.extend(lines_of(sorted_names[sort_idx]))
+            sort_idx += 1
+
+    result.extend(source_lines[pos:])  # trailing content
     return result
 
 
@@ -219,22 +316,24 @@ def _find_dependencies(
 ) -> dict[str, list[str]]:
     """Find dependencies between functions/methods based on call patterns.
 
-    Note: For top-level functions, decorators are not included as dependencies.
-    Decorators must be defined before use (syntactic constraint), but for step-down
-    ordering, the decorated function should come before its decorator.
+    Note: decorator_list is excluded from the walk. Decorator arguments are evaluated
+    at definition time, so any functions they call must already be defined before the
+    decorated function — treating them as step-down dependencies would invert that.
     """
     dependencies: dict[str, list[str]] = defaultdict(list)
     for func in funcs.values():
-        for node in walk(func):
-            if isinstance(node, Call):
-                target = get_call_target(node)
-                if (
-                    target is not None
-                    and target in funcs
-                    and not _is_pytest_fixture(funcs[target])
-                    and target not in dependencies[func.name]
-                ):
-                    dependencies[func.name].append(target)
+        subtrees = [*func.body, func.args, *([] if func.returns is None else [func.returns])]
+        for subtree in subtrees:
+            for node in walk(subtree):
+                if isinstance(node, Call):
+                    target = get_call_target(node)
+                    if (
+                        target is not None
+                        and target in funcs
+                        and not _is_pytest_fixture(funcs[target])
+                        and target not in dependencies[func.name]
+                    ):
+                        dependencies[func.name].append(target)
     return dependencies
 
 

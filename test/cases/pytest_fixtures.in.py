@@ -1,5 +1,6 @@
 import pytest
 
+
 def do_stuff():
     print("doing")
 
