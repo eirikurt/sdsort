@@ -1,5 +1,9 @@
 name: CI
 
+env:
+  UV_NO_MANAGED_PYTHON: true
+  UV_FROZEN: true
+
 on:
   push:
     branches: [main]
