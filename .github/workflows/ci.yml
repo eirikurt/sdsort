@@ -1,5 +1,8 @@
 name: CI
 
+env:
+  UV_FROZEN: true
+
 on:
   push:
     branches: [main]
@@ -9,14 +12,12 @@ on:
 jobs:
   lint:
     runs-on: ubuntu-latest
+    env:
+      UV_PYTHON: '3.14'
     steps:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
-
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.14'
 
       - name: Install uv
         uses: astral-sh/setup-uv@v7
@@ -45,15 +46,10 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@v6
-        with:
-          python-version: ${{ matrix.python-version }}
-
       - name: Install uv
         uses: astral-sh/setup-uv@v7
-
-      - name: Install dependencies
-        run: uv sync
-
+      
       - name: Test
         run: uv run pytest
+        env:
+          UV_PYTHON: ${{ matrix.python-version }}
