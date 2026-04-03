@@ -15,6 +15,11 @@ classifiers = [
 ]
 dependencies = ["click>=8.3.1"]
 
+[project.urls]
+Homepage = "https://github.com/eirikurt/sdsort"
+Issues = "https://github.com/eirikurt/sdsort/issues"
+Repository = "https://github.com/eirikurt/sdsort.git"
+
 [project.scripts]
 sdsort = "sdsort:main"
 
