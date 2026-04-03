@@ -35,4 +35,4 @@ This will exit with code 1 if any files would be re-arranged, making it suitable
 
 ## Maturity
 
-It's early days. Consider this an alpha for now.
+It's early days. Consider this a beta for now.
