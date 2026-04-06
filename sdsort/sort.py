@@ -3,7 +3,7 @@ from collections import defaultdict
 from typing import Callable, Iterable, Optional
 
 from .format import normalize_blank_lines
-from .utils.ast import Function, determine_line_range
+from .utils.ast import Function, determine_line_range, get_class_nodes, get_method_nodes
 from .utils.file import read_file
 
 
@@ -21,7 +21,7 @@ def step_down_sort(python_file_path: str) -> Optional[str]:
 
     # Then, sort methods within classes
     final_lines: list[str] = []
-    for cls in _find_classes(modified_tree):
+    for cls in get_class_nodes(modified_tree):
         # Copy everything, which hasn't been copied so far, up until the class def,
         final_lines.extend(modified_lines[len(final_lines) : cls.lineno])
 
@@ -149,17 +149,11 @@ def _rearrange_top_level_functions(
     return result
 
 
-def _find_classes(syntax_tree: Module) -> Iterable[ClassDef]:
-    for node in syntax_tree.body:
-        if isinstance(node, ClassDef):
-            yield node
-
-
 def _sort_methods_within_class(source_lines: list[str], class_def: ClassDef) -> list[str]:
     # TODO: recursively sort methods within nested classes?
 
     # Find methods
-    method_dict = {node.name: node for node in class_def.body if isinstance(node, (FunctionDef, AsyncFunctionDef))}
+    method_dict = {node.name: node for node in get_method_nodes(class_def)}
 
     # Build dependency graph among methods
     dependencies = _find_dependencies(method_dict, _method_call_target)
