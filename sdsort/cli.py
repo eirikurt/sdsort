@@ -1,11 +1,12 @@
 import os
-import time
+from dataclasses import dataclass, field
 from glob import glob
 from typing import Iterable
 
 import click
 
 from .sorting import step_down_sort
+from .timer import Timer
 
 
 @click.command()
@@ -17,41 +18,66 @@ from .sorting import step_down_sort
 )
 @click.option("--check", is_flag=True, help="Don't write changes, just report if files would be re-arranged.")
 def main(paths: tuple[str, ...], check: bool):
-    start_time = time.monotonic()
     file_paths = _expand_file_paths(paths)
-    modified_files: list[str] = []
-    pristine_files: list[str] = []
 
-    for file_path in sorted(file_paths):
+    with Timer() as t:
+        results = _sort_files(sorted(file_paths), check)
+
+    _print_results(results, check, t.elapsed)
+
+    if check and len(results.modified_files) > 0:
+        raise SystemExit(1)
+
+
+@dataclass
+class Results:
+    modified_files: list[str] = field(default_factory=list)
+    pristine_files: list[str] = field(default_factory=list)
+
+    def __len__(self):
+        return len(self.modified_files) + len(self.pristine_files)
+
+
+def _sort_files(file_paths: list[str], check: bool):
+    results = Results()
+
+    for file_path in file_paths:
         modified_source = step_down_sort(file_path)
         if modified_source is not None:
             if not check:
                 with open(file_path, "w") as file:
                     file.write(modified_source)
-            modified_files.append(file_path)
+            results.modified_files.append(file_path)
         else:
-            pristine_files.append(file_path)
+            results.pristine_files.append(file_path)
 
-    if len(modified_files) > 0:
+    return results
+
+
+def _print_results(results: Results, check: bool, duration: float):
+    if len(results.modified_files) > 0:
         if check:
             click.secho("The following files would be re-arranged:", fg="yellow", bold=True)
         else:
             click.secho("Re-arranged the following files:", fg="yellow", bold=True)
-        for modified_file in modified_files:
+        for modified_file in results.modified_files:
             click.echo(f"- {modified_file}")
-    if len(pristine_files) > 0:
+    if len(results.pristine_files) > 0:
         click.secho(
-            f"{len(pristine_files)} file{'' if len(pristine_files) == 1 else 's'} left unchanged", fg="green"
+            f"{pluralize(len(results.pristine_files), 'file')} left unchanged",
+            fg="green",
         )
-    if len(modified_files) == 0 and len(pristine_files) == 0:
-        click.secho("No python files found to format", fg="green")
 
-    elapsed = time.monotonic() - start_time
-    total_files = len(modified_files) + len(pristine_files)
-    click.secho(f"Done! Checked {total_files} file{'' if total_files == 1 else 's'} in {elapsed:.2f}s", dim=True)
+    if len(results) == 0:
+        click.secho("No python files found to format", fg="yellow")
+    else:
+        click.secho(f"Done! Checked {pluralize(len(results), 'file')} in {duration:.2f}s", dim=True)
 
-    if check and len(modified_files) > 0:
-        raise SystemExit(1)
+
+def pluralize(count: int, word: str):
+    if count != 1:
+        word += "s"
+    return f"{count} {word}"
 
 
 def _expand_file_paths(paths: tuple[str, ...]) -> Iterable[str]:
