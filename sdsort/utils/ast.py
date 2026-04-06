@@ -49,7 +49,7 @@ def has_lineno(node: AST) -> TypeGuard[HasLineNo]:
 
 
 def is_blank(line: str):
-    return len(line.strip()) == 0
+    return len(line) == 0 or line.isspace()
 
 
 def is_comment(line: str):
