@@ -1,5 +1,7 @@
 from ast import AsyncFunctionDef, ClassDef, FunctionDef, parse
 
+from .utils.ast import find_first_line, is_blank
+
 
 def normalize_blank_lines(lines: list[str]) -> str:
     """Normalize blank lines per PEP 8:
@@ -13,33 +15,17 @@ def normalize_blank_lines(lines: list[str]) -> str:
 
     for node in tree.body:
         if isinstance(node, (FunctionDef, AsyncFunctionDef, ClassDef)):
-            target = min((d.lineno for d in node.decorator_list), default=node.lineno)
-            # Scan backwards past any leading comments so the 2 blank lines are
-            # inserted before the comment block, not between the comment and the def.
-            marker = target - 1  # 0-based index of the def/decorator line
-            while marker > 0 and lines[marker - 1].strip().startswith("#"):
-                marker -= 1
+            marker = find_first_line(node, lines)
             required_blanks[marker] = 2
 
-    for node in tree.body:
-        if not isinstance(node, ClassDef):
-            continue
+    classNodes = [node for node in tree.body if isinstance(node, ClassDef)]
+    for node in classNodes:
         methods = [n for n in node.body if isinstance(n, (FunctionDef, AsyncFunctionDef))]
         for i, method in enumerate(methods):
-            target = min((d.lineno for d in method.decorator_list), default=method.lineno)
-            if i == 0:
-                # For the first method, preserve existing blank lines (up to 1) rather
-                # than forcing 0 — this allows a blank between class variables and the
-                # first method when the author already wrote one.
-                preceding_blanks = 0
-                for line_idx in range(target - 2, -1, -1):
-                    if lines[line_idx].strip() == "":
-                        preceding_blanks += 1
-                    else:
-                        break
-                required_blanks[target - 1] = min(preceding_blanks, 1)
-            else:
-                required_blanks[target - 1] = 1  # 0-based
+            marker = find_first_line(method, lines)
+            has_preceding_blank = is_blank(lines[marker - 1])
+            is_first_method = i == 0
+            required_blanks[marker] = 1 if has_preceding_blank or not is_first_method else 0
 
     # Walk lines, stripping existing blank lines before def sites
     # and injecting the required number
@@ -48,22 +34,21 @@ def normalize_blank_lines(lines: list[str]) -> str:
     while i < len(lines):
         if i in required_blanks:
             # Strip any blank lines already accumulated at the end of result
-            while result and result[-1].strip() == "":
+            while result and is_blank(result[-1]):
                 result.pop()
             # Inject the required blank lines
             result.extend([""] * required_blanks[i])
         line = lines[i]
+        i += 1
         # Cap consecutive blank lines at 2 (PEP 8) for lines not controlled by required_blanks
         if (
             i not in required_blanks
-            and line.strip() == ""
+            and is_blank(line)
             and len(result) >= 2
-            and result[-1].strip() == ""
-            and result[-2].strip() == ""
+            and is_blank(result[-1])
+            and is_blank(result[-2])
         ):
-            i += 1
             continue
         result.append(line)
-        i += 1
 
     return "\n".join(result).strip() + "\n"

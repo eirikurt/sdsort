@@ -5,8 +5,11 @@ from typing import Iterable
 
 import click
 
-from .sorting import step_down_sort
-from .timer import Timer
+from .sort import step_down_sort
+from .utils.pluralize import pluralize
+from .utils.timer import Timer
+
+# TODO: switch to pathlib
 
 
 @click.command()
@@ -72,12 +75,6 @@ def _print_results(results: Results, check: bool, duration: float):
         click.secho("No python files found to format", fg="yellow")
     else:
         click.secho(f"Done! Checked {pluralize(len(results), 'file')} in {duration:.2f}s", dim=True)
-
-
-def pluralize(count: int, word: str):
-    if count != 1:
-        word += "s"
-    return f"{count} {word}"
 
 
 def _expand_file_paths(paths: tuple[str, ...]) -> Iterable[str]:

@@ -2,9 +2,9 @@ from ast import AsyncFunctionDef, Attribute, Call, ClassDef, FunctionDef, Module
 from collections import defaultdict
 from typing import Callable, Iterable, Optional
 
-from .ast_utils import FunDef, determine_line_range
-from .file_utils import read_file
-from .formatting import normalize_blank_lines
+from .format import normalize_blank_lines
+from .utils.ast import Function, determine_line_range
+from .utils.file import read_file
 
 
 def step_down_sort(python_file_path: str) -> Optional[str]:
@@ -49,10 +49,10 @@ def _sort_top_level_functions(source_lines: list[str], syntax_tree: Module) -> l
     # called at module level remain defined before the barrier that calls them.
     barrier_line_numbers = sorted(line_no for line_no, _ in _find_barriers(syntax_tree, func_dict))
 
-    sorted_dict: dict[str, FunDef] = {}
+    sorted_dict: dict[str, Function] = {}
     for zone_funcs in _group_by_zone(func_dict, source_lines, barrier_line_numbers):
         deps = _find_dependencies(zone_funcs, _function_call_target)
-        zone_sorted: dict[str, FunDef] = {}
+        zone_sorted: dict[str, Function] = {}
         for name in zone_funcs:
             _depth_first_sort(name, zone_funcs, deps, zone_sorted, [])
         sorted_dict.update(zone_sorted)
@@ -60,11 +60,11 @@ def _sort_top_level_functions(source_lines: list[str], syntax_tree: Module) -> l
     return _rearrange_top_level_functions(source_lines, func_dict, sorted_dict)
 
 
-def _find_top_level_functions(syntax_tree: Module) -> dict[str, FunDef]:
+def _find_top_level_functions(syntax_tree: Module) -> dict[str, Function]:
     return {node.name: node for node in syntax_tree.body if isinstance(node, (FunctionDef, AsyncFunctionDef))}
 
 
-def _find_barriers(syntax_tree: Module, functions: dict[str, FunDef]) -> list[tuple[int, set[str]]]:
+def _find_barriers(syntax_tree: Module, functions: dict[str, Function]) -> list[tuple[int, set[str]]]:
     """Find module-level statements that call functions directly.
 
     Returns a list of (line_number, set of function names called) for each barrier.
@@ -88,15 +88,15 @@ def _find_barriers(syntax_tree: Module, functions: dict[str, FunDef]) -> list[tu
 
 
 def _group_by_zone(
-    func_dict: dict[str, FunDef], source_lines: list[str], barrier_line_numbers: list[int]
-) -> Iterable[dict[str, FunDef]]:
+    func_dict: dict[str, Function], source_lines: list[str], barrier_line_numbers: list[int]
+) -> Iterable[dict[str, Function]]:
     """Group functions into zones separated by barrier lines.
 
     Each zone contains the functions that appear between two consecutive barriers
     (or before the first / after the last). Functions within a zone can be freely
     reordered without crossing a barrier.
     """
-    zones: list[dict[str, FunDef]] = [{} for _ in range(len(barrier_line_numbers) + 1)]
+    zones: list[dict[str, Function]] = [{} for _ in range(len(barrier_line_numbers) + 1)]
     for name, func in func_dict.items():
         func_start = determine_line_range(func, source_lines)[0]
         # barrier_lines are 1-based (AST), func_start is 0-based — the off-by-one
@@ -111,8 +111,8 @@ def _group_by_zone(
 
 def _rearrange_top_level_functions(
     source_lines: list[str],
-    func_dict: dict[str, FunDef],
-    sorted_dict: dict[str, FunDef],
+    func_dict: dict[str, Function],
+    sorted_dict: dict[str, Function],
 ) -> list[str]:
     # Pre-compute all line ranges up front.
     ranges = {name: determine_line_range(node, source_lines) for name, node in func_dict.items()}
@@ -165,7 +165,7 @@ def _sort_methods_within_class(source_lines: list[str], class_def: ClassDef) -> 
     dependencies = _find_dependencies(method_dict, _method_call_target)
 
     # Re-order methods as needed
-    sorted_dict: dict[str, FunDef] = {}
+    sorted_dict: dict[str, Function] = {}
     for method_name in method_dict:
         _depth_first_sort(method_name, method_dict, dependencies, sorted_dict, [])
 
@@ -174,7 +174,7 @@ def _sort_methods_within_class(source_lines: list[str], class_def: ClassDef) -> 
 
 
 def _find_dependencies(
-    funcs: dict[str, FunDef],
+    funcs: dict[str, Function],
     get_call_target: Callable[[Call], Optional[str]],
 ) -> dict[str, list[str]]:
     """Find dependencies between functions/methods based on call patterns.
@@ -200,7 +200,7 @@ def _find_dependencies(
     return dependencies
 
 
-def _is_pytest_fixture(node: FunDef) -> bool:
+def _is_pytest_fixture(node: Function) -> bool:
     """Check if a function is decorated with @pytest.fixture."""
     for decorator in node.decorator_list:
         target = decorator.func if isinstance(decorator, Call) else decorator
@@ -223,9 +223,9 @@ def _function_call_target(node: Call) -> Optional[str]:
 
 def _depth_first_sort(
     current_method_name: str,
-    method_dict: dict[str, FunDef],
+    method_dict: dict[str, Function],
     dependencies: dict[str, list[str]],
-    sorted_dict: dict[str, FunDef],
+    sorted_dict: dict[str, Function],
     path: list[str],
 ):
     path.append(current_method_name)
@@ -242,8 +242,8 @@ def _depth_first_sort(
 
 def _rearrange_class_code(
     class_def: ClassDef,
-    method_dict: dict[str, FunDef],
-    sorted_dict: dict[str, FunDef],
+    method_dict: dict[str, Function],
+    sorted_dict: dict[str, Function],
     source_lines: list[str],
 ) -> list[str]:
     """Rearrange source lines by swapping functions from their original positions to sorted positions."""
