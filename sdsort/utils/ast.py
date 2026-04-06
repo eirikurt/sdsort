@@ -1,4 +1,4 @@
-from ast import AST, AsyncFunctionDef, ClassDef, FunctionDef, walk
+from ast import AST, AsyncFunctionDef, ClassDef, FunctionDef, Module, walk
 from itertools import takewhile
 from typing import Protocol, TypeGuard, Union
 
@@ -61,3 +61,15 @@ def count_leading_whitespace_chars(line: str):
     for _ in takewhile(lambda x: x == " " or x == "\t", line):
         count += 1
     return count
+
+
+def get_function_and_class_nodes(ast: Module):
+    return [node for node in ast.body if isinstance(node, (FunctionDef, AsyncFunctionDef, ClassDef))]
+
+
+def get_class_nodes(ast: Module):
+    return [node for node in ast.body if isinstance(node, ClassDef)]
+
+
+def get_method_nodes(classNode: ClassDef):
+    return [node for node in classNode.body if isinstance(node, (FunctionDef, AsyncFunctionDef))]
