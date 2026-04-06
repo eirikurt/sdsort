@@ -2,7 +2,8 @@ from ast import AsyncFunctionDef, Attribute, Call, ClassDef, FunctionDef, Module
 from collections import defaultdict
 from typing import Callable, Iterable, Optional
 
-from .ast_utils import FunDef, determine_line_range, read_file
+from .ast_utils import FunDef, determine_line_range
+from .file_utils import read_file
 from .formatting import normalize_blank_lines
 
 
