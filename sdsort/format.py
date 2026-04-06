@@ -40,15 +40,9 @@ def normalize_blank_lines(lines: list[str]) -> str:
             result.extend([""] * required_blanks[i])
         line = lines[i]
         i += 1
-        # Cap consecutive blank lines at 2 (PEP 8) for lines not controlled by required_blanks
-        if (
-            i not in required_blanks
-            and is_blank(line)
-            and len(result) >= 2
-            and is_blank(result[-1])
-            and is_blank(result[-2])
-        ):
-            continue
-        result.append(line)
+
+        # Cap consecutive blank lines at 2 (PEP 8)
+        if not is_blank(line) or len(result) < 2 or any(not is_blank(line) for line in result[-2:]):
+            result.append(line)
 
     return "\n".join(result).strip() + "\n"
