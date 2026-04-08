@@ -6,6 +6,7 @@ import pytest
 from click.testing import CliRunner
 
 from sdsort import main, step_down_sort
+from sdsort.utils.file import read_file
 
 TEST_CASES_DIR = "test/cases"
 
@@ -127,8 +128,3 @@ def test_check_flag_exits_cleanly_when_files_are_already_sorted():
         # Assert
         assert result.exit_code == 0, "Exit code should be 0 when files are already sorted"
         assert "would be re-arranged" not in result.output
-
-
-def read_file(file_path: str) -> str:
-    with open(file_path) as file:
-        return file.read()
