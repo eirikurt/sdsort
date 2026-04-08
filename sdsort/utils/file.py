@@ -1,5 +1,8 @@
+import tokenize
+
+
 def read_file(file_path: str) -> str:
-    with open(file_path) as f:
+    with tokenize.open(file_path) as f:
         source = f.read()
     return normalize_line_endings(source)
 
