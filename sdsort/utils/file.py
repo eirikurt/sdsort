@@ -1,14 +1,3 @@
-import tokenize
-
-
 def read_file(file_path: str) -> str:
-    with tokenize.open(file_path) as f:
-        source = f.read()
-    return normalize_line_endings(source)
-
-
-def normalize_line_endings(input: str):
-    result = input.replace("\r\n", "\n").replace("\r", "\n")
-    if not result.endswith("\n"):
-        result += "\n"
-    return result
+    with open(file_path, encoding="utf-8", newline=None) as f:
+        return f.read()
