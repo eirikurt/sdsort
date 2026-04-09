@@ -1,5 +1,6 @@
 from ast import AsyncFunctionDef, Attribute, Call, ClassDef, FunctionDef, Module, Name, parse, walk
 from collections import defaultdict
+from pathlib import Path
 from typing import Callable, Iterable, Optional
 
 from .format import normalize_blank_lines
@@ -7,7 +8,7 @@ from .utils.ast import Function, determine_line_range, get_class_nodes, get_meth
 from .utils.file import read_file
 
 
-def step_down_sort(python_file_path: str) -> Optional[str]:
+def step_down_sort(python_file_path: str | Path) -> Optional[str]:
     source = read_file(python_file_path)
     syntax_tree = parse(source, filename=python_file_path)
     source_lines = source.splitlines()
