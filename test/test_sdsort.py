@@ -65,7 +65,7 @@ def test_when_single_file_is_targeted_then_other_files_are_not_modified(tmp_path
     other_after = read_file(other_path)
 
     # Assert
-    assert target_after == read_file(f"{TEST_CASES_DIR}/comments.out.py"), "Target file should be sorted"
+    assert target_after == read_file(TEST_CASES_DIR / "comments.out.py"), "Target file should be sorted"
     assert other_after == read_file(other_file), "Other file should be unchanged"
 
 
@@ -114,7 +114,7 @@ def test_check_flag_reports_unsorted_files_without_modifying_them(tmp_path: Path
 
 def test_check_flag_exits_cleanly_when_files_are_already_sorted(tmp_path: Path):
     # Arrange
-    already_sorted_file = f"{TEST_CASES_DIR}/comments.out.py"
+    already_sorted_file = TEST_CASES_DIR / "comments.out.py"
     runner = CliRunner()
 
     target_path = shutil.copy(already_sorted_file, tmp_path)
