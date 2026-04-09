@@ -1,6 +1,5 @@
 import shutil
-import tempfile
-from os import mkdir, path
+from os import mkdir
 from pathlib import Path
 
 import pytest
