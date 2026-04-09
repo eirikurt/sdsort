@@ -1,4 +1,4 @@
-from ast import AsyncFunctionDef, ClassDef, FunctionDef, Module, parse
+from ast import Module, parse
 
 from .utils.ast import find_first_line, get_class_nodes, get_function_and_class_nodes, get_method_nodes, is_blank
 

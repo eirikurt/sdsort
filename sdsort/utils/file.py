@@ -1,11 +1,6 @@
-def read_file(file_path: str) -> str:
-    with open(file_path) as f:
-        source = f.read()
-    return normalize_line_endings(source)
+from pathlib import Path
 
 
-def normalize_line_endings(input: str):
-    result = input.replace("\r\n", "\n").replace("\r", "\n")
-    if not result.endswith("\n"):
-        result += "\n"
-    return result
+def read_file(file_path: str | Path) -> str:
+    with open(file_path, encoding="utf-8", newline=None) as f:
+        return f.read()

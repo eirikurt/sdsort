@@ -48,7 +48,7 @@ def _sort_files(file_paths: list[str], check: bool):
         modified_source = step_down_sort(file_path)
         if modified_source is not None:
             if not check:
-                with open(file_path, "w") as file:
+                with open(file_path, "w", encoding="utf-8") as file:
                     file.write(modified_source)
             results.modified_files.append(file_path)
         else:

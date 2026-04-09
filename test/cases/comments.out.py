@@ -2,6 +2,9 @@
 from typing import Optional
 
 
+print("\n═══ Analyse par categories (1ère catégorie) ═══\n")
+
+
 class Comment:
     SOME_CONSTANT = 1234
     ANOTHER_CONSTANT = "asdf"
