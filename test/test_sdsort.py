@@ -30,6 +30,7 @@ TEST_CASES_DIR = Path("test", "cases")
         "pytest_fixtures",
         "sandwiched_decorator",
         "parametrized_test",
+        "overloads",
     ],
 )
 def test_all_cases(test_case: str):
