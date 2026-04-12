@@ -15,3 +15,13 @@ class MyClass:
             print("It's a string!")
         else:
             print("It's a number")
+
+
+@overload
+def echo(value: None) -> None:
+    pass
+@overload
+def echo(value: bytes) -> bytes:
+    pass
+def echo(value):
+    return value

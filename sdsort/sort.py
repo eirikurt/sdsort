@@ -118,9 +118,7 @@ def _group_by_zone(
 
 
 def _rearrange_top_level_functions(
-    source_lines: list[str],
-    func_dict: FunctionsByName,
-    sorted_dict: FunctionsByName,
+    source_lines: list[str], func_dict: FunctionsByName, sorted_dict: FunctionsByName, start: int = 0
 ) -> list[str]:
     original_nodes = list(chain(*func_dict.values()))
     sorted_nodes = list(chain(*sorted_dict.values()))
@@ -131,16 +129,16 @@ def _rearrange_top_level_functions(
     def lines_of(node: Function) -> list[str]:
         # TODO: cache?
         start, stop = determine_line_range(node, source_lines)
-        return source_lines[start : stop + 1]
+        return source_lines[start:stop]
 
     result: list[str] = []
-    pos = 0
+    pos = start
     sort_idx = 0
 
     for orig_node in original_nodes:
         orig_start, orig_stop = determine_line_range(orig_node, source_lines)
         result.extend(source_lines[pos:orig_start])  # filler is always emitted in original order
-        pos = orig_stop + 1
+        pos = orig_stop
 
         if sort_idx >= len(sorted_nodes) or orig_node != sorted_nodes[sort_idx]:
             # The next sorted function hasn't reached its trigger slot yet; skip this slot.
@@ -159,7 +157,9 @@ def _rearrange_top_level_functions(
             result.extend(lines_of(sorted_nodes[sort_idx]))
             sort_idx += 1
 
-    result.extend(source_lines[pos:])  # trailing content
+    if start == 0:
+        # Include trailing content if we are doing the whole file
+        result.extend(source_lines[pos:])
     return result
 
 
@@ -180,7 +180,8 @@ def _sort_methods_within_class(source_lines: list[str], class_def: ClassDef) -> 
         _depth_first_sort(method_name, method_dict, dependencies, sorted_dict, [])
 
     # Copy lines from the original source, shifting the methods around as needed
-    return _rearrange_class_code(class_def, method_dict, sorted_dict, source_lines)
+    return _rearrange_top_level_functions(source_lines, method_dict, sorted_dict, start=class_def.lineno)
+    # return _rearrange_class_code(class_def, method_dict, sorted_dict, source_lines)
 
 
 def _find_dependencies(

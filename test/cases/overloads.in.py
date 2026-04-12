@@ -15,3 +15,13 @@ class MyClass:
 
     def bar(self):
         self.foo("string")
+
+
+@overload
+def echo(value: None) -> None:
+    pass
+@overload
+def echo(value: bytes) -> bytes:
+    pass
+def echo(value):
+    return value
