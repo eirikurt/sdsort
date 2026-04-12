@@ -1,4 +1,4 @@
-from ast import Module, parse
+from ast import AsyncFunctionDef, FunctionDef, Module, parse
 
 from .utils.ast import find_first_line, get_class_nodes, get_function_and_class_nodes, get_method_nodes, is_blank
 
@@ -7,6 +7,7 @@ def normalize_blank_lines(lines: list[str]) -> str:
     """Normalize blank lines per PEP 8:
     - 2 blank lines before top-level function/class definitions
     - 1 blank line between methods in a class (0 before the first)
+    - Then there are a few exceptions, like allowing 0 lines between overload defs
     """
     tree = parse("\n".join(lines) + "\n")
     required_blanks = _find_where_blanks_should_be(tree, lines)
@@ -25,7 +26,12 @@ def _find_where_blanks_should_be(ast: Module, lines: list[str]):
 
 def _find_required_top_level_blanks(ast: Module, lines: list[str]):
     required_blanks: dict[int, int] = {}
+    seen_functions = set[str]()
     for node in get_function_and_class_nodes(ast):
+        if isinstance(node, (FunctionDef, AsyncFunctionDef)):
+            if node.name in seen_functions:
+                continue
+            seen_functions.add(node.name)
         line_index = find_first_line(node, lines)
         required_blanks[line_index] = 2
     return required_blanks
@@ -33,8 +39,12 @@ def _find_required_top_level_blanks(ast: Module, lines: list[str]):
 
 def _find_required_class_method_blanks(ast, lines):
     required_blanks: dict[int, int] = {}
-    for node in get_class_nodes(ast):
-        for i, method in enumerate(get_method_nodes(node)):
+    for class_node in get_class_nodes(ast):
+        seen_methods = set[str]()
+        for i, method in enumerate(get_method_nodes(class_node)):
+            if method.name in seen_methods:
+                continue
+            seen_methods.add(method.name)
             line_index = find_first_line(method, lines)
             has_preceding_blank = is_blank(lines[line_index - 1])
             is_first_method = i == 0
