@@ -117,6 +117,27 @@ def _group_by_zone(
     return [z for z in zones if z]
 
 
+def _sort_methods_within_class(source_lines: list[str], class_def: ClassDef) -> list[str]:
+    # TODO: recursively sort methods within nested classes?
+
+    # Find methods
+    method_dict = defaultdict[str, list[Function]](list)
+    for node in get_method_nodes(class_def):
+        method_dict[node.name].append(node)
+
+    # Build dependency graph among methods
+    dependencies = _find_dependencies(method_dict, _method_call_target)
+
+    # Re-order methods as needed
+    sorted_dict: FunctionsByName = {}
+    for method_name in method_dict:
+        _depth_first_sort(method_name, method_dict, dependencies, sorted_dict, [])
+
+    # Copy lines from the original source, shifting the methods around as needed
+    return _rearrange_lines(source_lines, method_dict, sorted_dict, start=class_def.lineno)
+
+
+    # return _rearrange_class_code(class_def, method_dict, sorted_dict, source_lines)
 def _rearrange_lines(
     source_lines: list[str], func_dict: FunctionsByName, sorted_dict: FunctionsByName, start: int = 0
 ) -> list[str]:
@@ -184,27 +205,6 @@ def _ensure_number_of_leading_blank_lines_remains_unchanged(
         diff = num_leading_blanks_after - num_leading_blanks_before
         return list(rearranged_lines[diff:]) + [""] * diff
     return rearranged_lines
-
-
-def _sort_methods_within_class(source_lines: list[str], class_def: ClassDef) -> list[str]:
-    # TODO: recursively sort methods within nested classes?
-
-    # Find methods
-    method_dict = defaultdict[str, list[Function]](list)
-    for node in get_method_nodes(class_def):
-        method_dict[node.name].append(node)
-
-    # Build dependency graph among methods
-    dependencies = _find_dependencies(method_dict, _method_call_target)
-
-    # Re-order methods as needed
-    sorted_dict: FunctionsByName = {}
-    for method_name in method_dict:
-        _depth_first_sort(method_name, method_dict, dependencies, sorted_dict, [])
-
-    # Copy lines from the original source, shifting the methods around as needed
-    return _rearrange_lines(source_lines, method_dict, sorted_dict, start=class_def.lineno)
-    # return _rearrange_class_code(class_def, method_dict, sorted_dict, source_lines)
 
 
 def _find_dependencies(
