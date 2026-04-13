@@ -1,11 +1,11 @@
 from ast import AsyncFunctionDef, Attribute, Call, ClassDef, FunctionDef, Module, Name, parse, walk
 from collections import defaultdict
-from itertools import chain
+from itertools import chain, takewhile
 from pathlib import Path
 from typing import Callable, Iterable, Optional
 
 from .format import normalize_blank_lines
-from .utils.ast import Function, determine_line_range, get_class_nodes, get_method_nodes
+from .utils.ast import Function, determine_line_range, get_class_nodes, get_method_nodes, is_blank
 from .utils.file import read_file
 
 FunctionsByName = dict[str, list[Function]]
@@ -61,7 +61,7 @@ def _sort_top_level_functions(source_lines: list[str], syntax_tree: Module) -> l
             _depth_first_sort(name, zone_funcs, deps, zone_sorted, [])
         sorted_dict.update(zone_sorted)
 
-    return _rearrange_top_level_functions(source_lines, func_dict, sorted_dict)
+    return _rearrange_lines(source_lines, func_dict, sorted_dict)
 
 
 def _find_top_level_functions(syntax_tree: Module) -> FunctionsByName:
@@ -117,7 +117,7 @@ def _group_by_zone(
     return [z for z in zones if z]
 
 
-def _rearrange_top_level_functions(
+def _rearrange_lines(
     source_lines: list[str], func_dict: FunctionsByName, sorted_dict: FunctionsByName, start: int = 0
 ) -> list[str]:
     original_nodes = list(chain(*func_dict.values()))
@@ -160,7 +160,30 @@ def _rearrange_top_level_functions(
     if start == 0:
         # Include trailing content if we are doing the whole file
         result.extend(source_lines[pos:])
+
+    result = _ensure_number_of_leading_blank_lines_remains_unchanged(
+        source_lines[start : start + len(result)], result
+    )
     return result
+
+
+def _ensure_number_of_leading_blank_lines_remains_unchanged(
+    original_lines: list[str],
+    rearranged_lines: list[str],
+):
+    assert len(original_lines) == len(rearranged_lines)
+    num_leading_blanks_before = 0
+    for _ in takewhile(is_blank, original_lines):
+        num_leading_blanks_before += 1
+    num_leading_blanks_after = 0
+    for _ in takewhile(is_blank, rearranged_lines):
+        num_leading_blanks_after += 1
+    if num_leading_blanks_after > num_leading_blanks_before:
+        # We have additional leading blanks.
+        # Move them to the back and let the formatter take care of the rest.
+        diff = num_leading_blanks_after - num_leading_blanks_before
+        return list(rearranged_lines[diff:]) + [""] * diff
+    return rearranged_lines
 
 
 def _sort_methods_within_class(source_lines: list[str], class_def: ClassDef) -> list[str]:
@@ -180,7 +203,7 @@ def _sort_methods_within_class(source_lines: list[str], class_def: ClassDef) -> 
         _depth_first_sort(method_name, method_dict, dependencies, sorted_dict, [])
 
     # Copy lines from the original source, shifting the methods around as needed
-    return _rearrange_top_level_functions(source_lines, method_dict, sorted_dict, start=class_def.lineno)
+    return _rearrange_lines(source_lines, method_dict, sorted_dict, start=class_def.lineno)
     # return _rearrange_class_code(class_def, method_dict, sorted_dict, source_lines)
 
 
@@ -249,21 +272,3 @@ def _depth_first_sort(
             _depth_first_sort(dependency, method_dict, dependencies, sorted_dict, path)
 
     path.pop()
-
-
-def _rearrange_class_code(
-    class_def: ClassDef,
-    method_dict: FunctionsByName,
-    sorted_dict: FunctionsByName,
-    source_lines: list[str],
-) -> list[str]:
-    """Rearrange source lines by swapping functions from their original positions to sorted positions."""
-    result: list[str] = []
-    source_position = class_def.lineno
-    for original, replacement in zip(chain(*method_dict.values()), chain(*sorted_dict.values())):
-        original_range = determine_line_range(original, source_lines)
-        replacement_range = determine_line_range(replacement, source_lines)
-        result.extend(source_lines[source_position : original_range[0]])
-        result.extend(source_lines[replacement_range[0] : replacement_range[1]])
-        source_position = original_range[1]
-    return result
