@@ -137,7 +137,6 @@ def _sort_methods_within_class(source_lines: list[str], class_def: ClassDef) -> 
     return _rearrange_lines(source_lines, method_dict, sorted_dict, start=class_def.lineno)
 
 
-    # return _rearrange_class_code(class_def, method_dict, sorted_dict, source_lines)
 def _rearrange_lines(
     source_lines: list[str], func_dict: FunctionsByName, sorted_dict: FunctionsByName, start: int = 0
 ) -> list[str]:
