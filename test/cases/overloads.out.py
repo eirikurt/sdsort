@@ -17,6 +17,10 @@ class MyClass:
             print("It's a number")
 
 
+def chamber():
+    echo(b"chamber")
+
+
 @overload
 def echo(value: None) -> None:
     pass

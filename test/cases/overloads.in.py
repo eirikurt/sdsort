@@ -25,3 +25,7 @@ def echo(value: bytes) -> bytes:
     pass
 def echo(value):
     return value
+
+
+def chamber():
+    echo(b"chamber")
