@@ -1,7 +1,10 @@
+from abc import ABC
 from typing import overload
 
 
-class MyClass:
+class MyClass(
+    ABC
+):
     @overload
     def foo(self, something: str) -> None: ...
     @overload
