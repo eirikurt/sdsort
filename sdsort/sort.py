@@ -153,11 +153,7 @@ def _rearrange_lines(
     original_nodes = list(chain(*func_dict.values()))
     sorted_nodes = list(chain(*sorted_dict.values()))
 
-    # Pre-compute all line ranges up front.
-    # ranges = {name: determine_line_range(node, source_lines) for name, node in func_dict.items()}
-
     def lines_of(node: Function) -> list[str]:
-        # TODO: cache?
         start, stop = determine_line_range(node, source_lines)
         return source_lines[start:stop]
 
