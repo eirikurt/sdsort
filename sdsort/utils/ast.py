@@ -46,6 +46,11 @@ def find_last_line(function: ClassOrFunction, source_lines: list[str]) -> int:
     for _ in takewhile(should_continue, subsequent_lines):
         stop += 1
 
+    # Now continue until we find a non-blank line, to include trailing white-space
+    subsequent_lines = source_lines[stop:]
+    for _ in takewhile(is_blank, subsequent_lines):
+        stop += 1
+
     return stop
 
 

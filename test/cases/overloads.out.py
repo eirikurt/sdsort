@@ -20,6 +20,21 @@ class MyClass(
             print("It's a number")
 
 
+def the_void():
+    space(b"0")
+    chamber()
+
+
+@overload
+def space(value: None) -> None: ...
+
+@overload
+def space(value: bytes) -> bytes: ...
+
+def space(value):
+    return value
+
+
 def chamber():
     echo(b"chamber")
 

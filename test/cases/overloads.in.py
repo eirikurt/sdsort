@@ -32,3 +32,18 @@ def echo(value):
 
 def chamber():
     echo(b"chamber")
+
+
+@overload
+def space(value: None) -> None: ...
+
+@overload
+def space(value: bytes) -> bytes: ...
+
+def space(value):
+    return value
+
+
+def the_void():
+    space(b"0")
+    chamber()
