@@ -5,7 +5,14 @@ from pathlib import Path
 from typing import Callable, Iterable, Optional
 
 from .format import normalize_blank_lines
-from .utils.ast import Function, determine_line_range, get_class_nodes, get_method_nodes, is_blank
+from .utils.ast import (
+    Function,
+    determine_line_range,
+    find_start_of_class_body,
+    get_class_nodes,
+    get_method_nodes,
+    is_blank,
+)
 from .utils.file import read_file
 
 FunctionsByName = dict[str, list[Function]]
@@ -26,8 +33,9 @@ def step_down_sort(python_file_path: str | Path) -> Optional[str]:
     # Then, sort methods within classes
     final_lines: list[str] = []
     for cls in get_class_nodes(modified_tree):
-        # Copy everything, which hasn't been copied so far, up until the class def,
-        final_lines.extend(modified_lines[len(final_lines) : cls.lineno])
+        # Copy everything, which hasn't been copied so far, up until the class body,
+        class_body_start = find_start_of_class_body(cls, modified_lines)
+        final_lines.extend(modified_lines[len(final_lines) : class_body_start])
 
         # Copy class after sorting its methods
         final_lines.extend(_sort_methods_within_class(modified_lines, cls))
@@ -134,7 +142,9 @@ def _sort_methods_within_class(source_lines: list[str], class_def: ClassDef) -> 
         _depth_first_sort(method_name, method_dict, dependencies, sorted_dict, [])
 
     # Copy lines from the original source, shifting the methods around as needed
-    return _rearrange_lines(source_lines, method_dict, sorted_dict, start=class_def.lineno)
+    return _rearrange_lines(
+        source_lines, method_dict, sorted_dict, start=find_start_of_class_body(class_def, source_lines)
+    )
 
 
 def _rearrange_lines(

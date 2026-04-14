@@ -6,6 +6,15 @@ Function = Union[FunctionDef, AsyncFunctionDef]
 ClassOrFunction = Union[ClassDef, Function]
 
 
+def find_start_of_class_body(cls: ClassDef, source_lines: list[str]):
+    first_method = next(get_method_nodes(cls), None)
+    if first_method is not None:
+        return find_first_line(first_method, source_lines)
+
+    # HACK: this is not a great fallback, but it shouldn't matter since there are no methods to re-arrange
+    return cls.lineno
+
+
 def determine_line_range(class_or_function: ClassOrFunction, source_lines: list[str]) -> tuple[int, int]:
     start = find_first_line(class_or_function, source_lines)
     stop = find_last_line(class_or_function, source_lines)
@@ -72,4 +81,4 @@ def get_class_nodes(ast: Module):
 
 
 def get_method_nodes(classNode: ClassDef):
-    return [node for node in classNode.body if isinstance(node, (FunctionDef, AsyncFunctionDef))]
+    return (node for node in classNode.body if isinstance(node, (FunctionDef, AsyncFunctionDef)))
