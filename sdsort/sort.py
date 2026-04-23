@@ -267,6 +267,11 @@ def _depth_first_sort(
     sorted_dict: FunctionsByName,
     path: list[str],
 ):
+    # If this is a root node, but we've already traversed it, return.
+    # Otherwise the sorting will not be stable in the presence of circular deps.
+    if len(path) == 0 and current_method_name in sorted_dict:
+        return
+
     path.append(current_method_name)
 
     # Rely on the fact that dicts maintain insertion order as of Python 3.7
