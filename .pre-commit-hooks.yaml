@@ -1,0 +1,6 @@
+- id: sdsort
+  name: sdsort
+  description: Sorts functions and class methods according to the step-down rule
+  language: python
+  entry: sdsort
+  types: [python]

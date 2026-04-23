@@ -33,6 +33,18 @@ sdsort --check <file_or_directory>
 
 This will exit with code 1 if any files would be re-arranged, making it suitable for CI pipelines and pre-commit hooks.
 
+## pre-commit
+
+`sdsort` can be used as a [pre-commit](https://pre-commit.com/) hook. Add the following to your `.pre-commit-config.yaml`:
+
+```yaml
+repos:
+  - repo: https://github.com/eirikurt/sdsort
+    rev: v0.4.5
+    hooks:
+      - id: sdsort
+```
+
 ## Maturity
 
 It's early days. Consider this a beta for now.
