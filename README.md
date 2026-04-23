@@ -40,7 +40,7 @@ This will exit with code 1 if any files would be re-arranged, making it suitable
 ```yaml
 repos:
   - repo: https://github.com/eirikurt/sdsort
-    rev: v0.4.5
+    rev: v0.5.0
     hooks:
       - id: sdsort
 ```
