@@ -9,3 +9,15 @@ class CircularRef:
 
     def c(self):
         self.a(1000)
+
+
+class Selector():
+    def __or__(self, other):
+        return self.union(other)
+
+    def union(self, other):  # noqa: D102
+        match other:
+            case Selector():
+                return 1
+            case _:
+                return super().__or__(other)
