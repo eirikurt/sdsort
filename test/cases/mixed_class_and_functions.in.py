@@ -16,3 +16,6 @@ class MyClass:
 
     def outer(self):
         self.inner()
+
+    def calls_top_level_function(self):
+        process()
