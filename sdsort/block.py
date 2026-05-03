@@ -43,6 +43,8 @@ class Block(ABC):
 
 
 class ClassBlock(Block):
+    _node: ClassDef
+
     def __init__(self, node: ClassDef, source_lines: list[str]):
         super().__init__(node, source_lines)
         method_nodes = get_method_nodes(node)
@@ -51,6 +53,14 @@ class ClassBlock(Block):
     def find_calls(self) -> Generator[Call, None, None]:
         for method in self._methods:
             yield from method.find_calls()
+
+    def is_subclass_of(self, other: "ClassBlock") -> bool:
+        for base in self._node.bases:
+            if isinstance(base, Name) and base.id == other.name:
+                return True
+            if isinstance(base, Attribute) and base.attr == other.name:
+                return True
+        return False
 
 
 class FunctionBlock(Block):

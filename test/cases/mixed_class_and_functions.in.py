@@ -8,9 +8,14 @@ def process():
 
 def main():
     process()
+    return MyClass()
 
 
-class MyClass:
+class BaseClass:
+    pass
+
+
+class MyClass(BaseClass):
     def inner(self):
         print("inner")
 

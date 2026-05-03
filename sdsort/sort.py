@@ -4,7 +4,7 @@ from itertools import chain, takewhile
 from pathlib import Path
 from typing import Callable, Iterable, Optional
 
-from .block import Block, FunctionBlock, block_for
+from .block import Block, ClassBlock, FunctionBlock, block_for
 from .format import normalize_blank_lines
 from .utils.ast import (
     find_start_of_class_body,
@@ -161,6 +161,11 @@ def _find_dependencies(
     """
     dependencies: dict[str, list[str]] = defaultdict(list)
     for block in chain(*blocks_by_name.values()):
+        # Base classes must appear before subclasses
+        if isinstance(block, ClassBlock):
+            for subclass_block in _find_subclasses(block, blocks_by_name):
+                dependencies[block.name].append(subclass_block.name)
+
         for call in block.find_calls():
             target = get_call_target(call)
             if (
@@ -171,6 +176,13 @@ def _find_dependencies(
             ):
                 dependencies[block.name].append(target)
     return dependencies
+
+
+def _find_subclasses(parent_class: ClassBlock, blocks_by_name: BlocksByName):
+    for block in chain(*blocks_by_name.values()):
+        if isinstance(block, ClassBlock) and block != parent_class:
+            if block.is_subclass_of(parent_class):
+                yield block
 
 
 def _depth_first_sort(

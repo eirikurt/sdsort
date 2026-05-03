@@ -1,8 +1,13 @@
 def main():
     process()
+    return MyClass()
 
 
-class MyClass:
+class BaseClass:
+    pass
+
+
+class MyClass(BaseClass):
     def outer(self):
         self.inner()
 
