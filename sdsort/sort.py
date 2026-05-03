@@ -162,9 +162,14 @@ def _find_dependencies(
     dependencies: dict[str, list[str]] = defaultdict(list)
     for block in chain(*blocks_by_name.values()):
         # Base classes must appear before subclasses
+        # TODO: It would probably be more efficient to check if a class has a parent class, then go search for that
         if isinstance(block, ClassBlock):
             for subclass_block in _find_subclasses(block, blocks_by_name):
                 dependencies[block.name].append(subclass_block.name)
+
+        for ref_name in block.find_type_refs():
+            if ref_name in blocks_by_name and ref_name != block.name and block.name not in dependencies[ref_name]:
+                dependencies[ref_name].append(block.name)
 
         for call in block.find_calls():
             target = get_call_target(call)

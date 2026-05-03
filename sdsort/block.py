@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from ast import AsyncFunctionDef, Attribute, Call, ClassDef, FunctionDef, Name, stmt, walk
+from ast import AsyncFunctionDef, Attribute, Call, ClassDef, Constant, FunctionDef, Name, stmt, walk
 from typing import Generator
 
 from .utils.ast import (
@@ -25,6 +25,10 @@ class Block(ABC):
 
     @abstractmethod
     def find_calls(self) -> Generator[Call, None, None]:
+        raise NotImplementedError
+
+    @abstractmethod
+    def find_type_refs(self) -> Generator[str, None, None]:
         raise NotImplementedError
 
     @property
@@ -54,6 +58,10 @@ class ClassBlock(Block):
         for method in self._methods:
             yield from method.find_calls()
 
+    def find_type_refs(self) -> Generator[str, None, None]:
+        for method in self._methods:
+            yield from method.find_type_refs()
+
     def is_subclass_of(self, other: "ClassBlock") -> bool:
         for base in self._node.bases:
             if isinstance(base, Name) and base.id == other.name:
@@ -64,14 +72,32 @@ class ClassBlock(Block):
 
 
 class FunctionBlock(Block):
+    _node: Function
+
     def __init__(self, node: Function, source_lines: list[str]):
         super().__init__(node, source_lines)
 
     def find_calls(self) -> Generator[Call, None, None]:
         root = self._node
-        assert not isinstance(root, ClassDef)
         subtrees = [*root.body, root.args, *([] if root.returns is None else [root.returns])]
         for subtree in subtrees:
             for node in walk(subtree):
                 if isinstance(node, Call):
                     yield node
+
+    def find_type_refs(self) -> Generator[str, None, None]:
+        root = self._node
+        all_args = [*root.args.posonlyargs, *root.args.args, *root.args.kwonlyargs]
+        if root.args.vararg:
+            all_args.append(root.args.vararg)
+        if root.args.kwarg:
+            all_args.append(root.args.kwarg)
+        annotation_nodes = [a.annotation for a in all_args if a.annotation is not None]
+        if root.returns is not None:
+            annotation_nodes.append(root.returns)
+        for annotation in annotation_nodes:
+            if isinstance(annotation, Constant) and isinstance(annotation.value, str):
+                continue  # skip lazy string annotations like "MyClass"
+            for node in walk(annotation):
+                if isinstance(node, Name):
+                    yield node.id
