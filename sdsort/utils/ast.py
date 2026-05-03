@@ -15,6 +15,10 @@ def find_start_of_class_body(cls: ClassDef, source_lines: list[str]):
     return cls.lineno
 
 
+def get_method_nodes(classNode: ClassDef):
+    return (node for node in classNode.body if isinstance(node, (FunctionDef, AsyncFunctionDef)))
+
+
 def determine_line_range(class_or_function: ClassOrFunction, source_lines: list[str]) -> tuple[int, int]:
     start = find_first_line(class_or_function, source_lines)
     stop = find_last_line(class_or_function, source_lines)
@@ -54,20 +58,8 @@ def find_last_line(function: ClassOrFunction, source_lines: list[str]) -> int:
     return stop
 
 
-class HasLineNo(Protocol):
-    lineno: int
-
-
-def has_lineno(node: AST) -> TypeGuard[HasLineNo]:
-    return hasattr(node, "lineno")
-
-
 def is_blank(line: str):
     return len(line) == 0 or line.isspace()
-
-
-def is_comment(line: str):
-    return line.strip().startswith("#")
 
 
 def count_leading_whitespace_chars(line: str):
@@ -77,13 +69,21 @@ def count_leading_whitespace_chars(line: str):
     return count
 
 
+class HasLineNo(Protocol):
+    lineno: int
+
+
+def has_lineno(node: AST) -> TypeGuard[HasLineNo]:
+    return hasattr(node, "lineno")
+
+
+def is_comment(line: str):
+    return line.strip().startswith("#")
+
+
 def get_function_and_class_nodes(ast: Module):
     return [node for node in ast.body if isinstance(node, (FunctionDef, AsyncFunctionDef, ClassDef))]
 
 
 def get_class_nodes(ast: Module):
     return [node for node in ast.body if isinstance(node, ClassDef)]
-
-
-def get_method_nodes(classNode: ClassDef):
-    return (node for node in classNode.body if isinstance(node, (FunctionDef, AsyncFunctionDef)))
