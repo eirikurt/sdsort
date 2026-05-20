@@ -64,10 +64,11 @@ class ClassBlock(Block):
 
     def is_subclass_of(self, other: "ClassBlock") -> bool:
         for base in self._node.bases:
-            if isinstance(base, Name) and base.id == other.name:
-                return True
-            if isinstance(base, Attribute) and base.attr == other.name:
-                return True
+            for node in walk(base):
+                if isinstance(node, Name) and node.id == other.name:
+                    return True
+                if isinstance(node, Attribute) and node.attr == other.name:
+                    return True
         return False
 
 
