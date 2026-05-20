@@ -32,6 +32,7 @@ TEST_CASES_DIR = Path("test", "cases")
         "parametrized_test",
         "overloads",
         "type_hints",
+        "jpe",
         "multiline_string",
     ],
 )
