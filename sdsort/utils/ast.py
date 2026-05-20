@@ -36,7 +36,7 @@ def find_first_line(class_or_function: ClassOrFunction, source_lines: list[str])
 
 
 def find_last_line(function: ClassOrFunction, source_lines: list[str]) -> int:
-    stop = max(n.lineno for n in walk(function) if has_lineno(n))
+    stop = max(getattr(n, "end_lineno", n.lineno) for n in walk(function) if has_lineno(n))
 
     # Probe a bit further until we find a blank line or one with less indentation than the function/class body
     def should_continue(line: str):

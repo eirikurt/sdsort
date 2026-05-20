@@ -31,6 +31,7 @@ TEST_CASES_DIR = Path("test", "cases")
         "sandwiched_decorator",
         "parametrized_test",
         "overloads",
+        "multiline_string",
     ],
 )
 def test_all_cases(test_case: str):
