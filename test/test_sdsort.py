@@ -34,6 +34,7 @@ TEST_CASES_DIR = Path("test", "cases")
         "type_hints",
         "jpe",
         "multiline_string",
+        "circular_class",
     ],
 )
 def test_all_cases(test_case: str):
