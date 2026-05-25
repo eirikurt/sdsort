@@ -18,6 +18,14 @@ BlocksByName = dict[str, list[Block]]
 
 
 def step_down_sort(python_file_path: str | Path) -> Optional[str]:
+    # New algorithm
+    # Segment source code into blocks (classes, functions, other)
+    # Find hard dependencies, which if not honored will result in syntax errors
+    # Find call dependencies, which we aspire to sort by, but only if it doesn't violate hard dependencies
+    #   Idea: only add call deps if it doesn't result in a circle in the dep graph
+    # Order the blocks via traversal of the dep tree/forest
+    # Re-arrange code
+
     source = read_file(python_file_path)
     syntax_tree = parse(source, filename=python_file_path)
     source_lines = source.splitlines()
