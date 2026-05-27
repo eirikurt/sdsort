@@ -1,16 +1,15 @@
 from ast import Attribute, Call, ClassDef, Module, Name, parse
-from collections import defaultdict
-from itertools import chain, takewhile
+from collections.abc import Collection
+from itertools import takewhile
 from pathlib import Path
 from typing import Callable, Optional, Union
 
-from .block import Block, ClassBlock, FunctionBlock, block_for
+from .block import Block, ClassBlock, FunctionBlock, StatementBlock, block_for
 from .format import normalize_blank_lines
 from .graph import AcyclicGraph
 from .utils.ast import (
     find_start_of_class_body,
     get_class_nodes,
-    get_method_nodes,
     is_blank,
 )
 from .utils.file import read_file
@@ -64,7 +63,7 @@ def _sort_top_level_blocks(source_lines: list[str], syntax_tree: Module) -> list
     if not blocks:
         return source_lines
 
-    deps = _find_dependencies(blocks)
+    deps = _find_dependencies(blocks, _function_call_target)
     sorted_blocks: list[Block] = []
     for block in blocks:
         _depth_first_sort(block, blocks, deps, sorted_blocks, [])
@@ -78,6 +77,13 @@ def _find_top_level_blocks(syntax_tree: Module, source_lines: list[str]):
         if current_block is None or not current_block.append(node):
             current_block = block_for(node, source_lines)
             blocks.append(current_block)
+
+    for block in blocks:
+        if isinstance(block, StatementBlock):
+            pass
+        else:
+            pass
+
     return blocks
 
 
@@ -85,27 +91,24 @@ def _sort_methods_within_class(source_lines: list[str], class_def: ClassDef) -> 
     # TODO: recursively sort methods within nested classes?
 
     # Find methods
-    method_dict = defaultdict[str, list[Block]](list)
-    for node in get_method_nodes(class_def):
-        block = FunctionBlock(node, source_lines)
-        method_dict[block.name].append(block)
+    blocks = ClassBlock(class_def, source_lines).method_blocks
 
     # Build dependency graph among methods
-    dependencies = _find_dependencies(method_dict, _method_call_target)
+    dependencies = _find_dependencies(blocks, _method_call_target)
 
     # Re-order methods as needed
-    sorted_dict: BlocksByName = {}
-    for method_name in method_dict:
-        _depth_first_sort(method_name, method_dict, dependencies, sorted_dict, [])
+    sorted_blocks: list[Block] = []
+    for block in blocks:
+        _depth_first_sort(block, blocks, dependencies, sorted_blocks, [])
 
     # Copy lines from the original source, shifting the methods around as needed
     return _rearrange_lines(
-        source_lines, method_dict, sorted_dict, start=find_start_of_class_body(class_def, source_lines)
+        source_lines, blocks, sorted_blocks, start=find_start_of_class_body(class_def, source_lines)
     )
 
 
 def _find_dependencies(
-    blocks: list[Block],
+    blocks: Collection[Block],
     get_call_target: Callable[[Call], Optional[str]],
 ):
     dependencies = AcyclicGraph()
@@ -128,43 +131,32 @@ def _find_dependencies(
     return dependencies
 
 
-def _find_subclasses(parent_class: ClassBlock, blocks_by_name: BlocksByName):
-    for block in chain(*blocks_by_name.values()):
-        if isinstance(block, ClassBlock) and block != parent_class:
-            if block.is_subclass_of(parent_class):
-                yield block
-
-
 def _depth_first_sort(
-    current_block_name: str,
-    blocks_by_name: BlocksByName,
-    dependencies: dict[str, list[str]],
-    sorted_blocks: BlocksByName,
-    path: list[str],
+    current_block: Block,
+    blocks: Collection[Block],
+    dependencies: AcyclicGraph,
+    sorted_blocks: list[Block],
+    path: list[Block],
 ):
-    # If this is a root node, but we've already traversed it, return.
-    # Otherwise the sorting will not be stable in the presence of circular deps.
-    if len(path) == 0 and current_block_name in sorted_blocks:
-        return
+    path.append(current_block)
 
-    path.append(current_block_name)
+    # Move the current block last
+    try:
+        sorted_blocks.remove(current_block)
+    except ValueError:
+        pass
+    sorted_blocks.append(current_block)
 
-    # Rely on the fact that dicts maintain insertion order as of Python 3.7
-    block_list = sorted_blocks.pop(current_block_name, blocks_by_name[current_block_name])
-    sorted_blocks[current_block_name] = block_list
-    for dependency in dependencies[current_block_name]:
+    for dependency in dependencies.get_successors(current_block):
         if dependency not in path:
-            _depth_first_sort(dependency, blocks_by_name, dependencies, sorted_blocks, path)
+            _depth_first_sort(dependency, blocks, dependencies, sorted_blocks, path)
 
     path.pop()
 
 
 def _rearrange_lines(
-    source_lines: list[str], blocks_by_name: BlocksByName, sorted_blocks_by_name: BlocksByName, start: int = 0
+    source_lines: list[str], original_blocks: Collection[Block], sorted_blocks: list[Block], start: int = 0
 ) -> list[str]:
-    original_blocks = list(chain(*blocks_by_name.values()))
-    sorted_blocks = list(chain(*sorted_blocks_by_name.values()))
-
     def lines_of(block: Block) -> list[str]:
         return source_lines[block.start : block.end]
 

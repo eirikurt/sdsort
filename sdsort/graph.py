@@ -8,7 +8,7 @@ class AcyclicGraph:
         self._edges = defaultdict[Block, list[Block]](list)
 
     def add_edge(self, *, _from: Block, to: Block) -> bool:
-        if to in self._edges.get(_from, []):
+        if to in self._edges[_from]:
             return False
         if _from == to or self._is_reachable(_from, start=to):
             return False
@@ -25,5 +25,8 @@ class AcyclicGraph:
             if node in visited:
                 continue
             visited.add(node)
-            stack.extend(self._edges.get(node, []))
+            stack.extend(self._edges[node])
         return False
+
+    def get_successors(self, _from: Block):
+        yield from self._edges[_from]

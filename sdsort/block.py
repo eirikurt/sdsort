@@ -1,9 +1,11 @@
 from abc import ABC, abstractmethod
 from ast import AST, AsyncFunctionDef, Attribute, Call, ClassDef, Constant, FunctionDef, Name, stmt, walk
-from typing import Generator, override
+from collections.abc import Collection
+from typing import Generator, Union
 
 from .utils.ast import (
     Function,
+    determine_line_range,
     get_method_nodes,
 )
 
@@ -13,12 +15,14 @@ def block_for(node: stmt, source_lines: list[str]):
         return FunctionBlock(node, source_lines)
     elif isinstance(node, ClassDef):
         return ClassBlock(node, source_lines)
-    return StatementBlock(node, source_lines)
+    return StatementBlock(node)
 
 
 class Block(ABC):
-    def __init__(self, node: AST, source_lines: list[str]):
+    def __init__(self, node: AST):
         self._nodes = [node]
+        self.start = -1
+        self.end = -1
 
     @abstractmethod
     def append(self, node: AST) -> bool:
@@ -39,21 +43,27 @@ class Block(ABC):
 
 
 class StatementBlock(Block):
-    @override
+    _nodes: list[stmt]
+
+    def __init__(self, node: stmt):
+        super().__init__(node)
+        self.start = node.lineno
+        self.end = node.end_lineno or node.lineno
+
     def append(self, node: AST) -> bool:
-        if not isinstance(node, (ClassDef, FunctionDef, AsyncFunctionDef)):
+        if isinstance(node, stmt) and not isinstance(node, (ClassDef, FunctionDef, AsyncFunctionDef)):
             self._nodes.append(node)
+            self.start = min(self.start, node.lineno)
+            self.end = max(self.end, node.end_lineno or node.lineno)
             return True
         return False
 
-    @override
     def find_predecessors(self) -> Generator[str, None, None]:
         for node in self._nodes:
             for child in walk(node):
                 if isinstance(child, Call) and isinstance(child.func, Name):
                     yield child.func.id
 
-    @override
     def find_calls(self) -> Generator[Call, None, None]:
         yield from []
 
@@ -62,20 +72,24 @@ class ClassBlock(Block):
     _nodes: list[ClassDef]
 
     def __init__(self, node: ClassDef, source_lines: list[str]):
-        super().__init__(node, source_lines)
+        super().__init__(node)
+        self.start, self.end = determine_line_range(node, source_lines)
         method_nodes = get_method_nodes(node)
-        self._methods = [FunctionBlock(m, source_lines) for m in method_nodes]
+        current_block: Union[Block, None] = None
+        self._methods: list[FunctionBlock] = []
+        current_block: Union[Block, None] = None
+        for method_node in method_nodes:
+            if current_block is None or not current_block.append(method_node):
+                current_block = FunctionBlock(method_node, source_lines)
+                self._methods.append(current_block)
 
-    @override
     def append(self, node: AST) -> bool:
         return False
 
-    @override
     def find_calls(self) -> Generator[Call, None, None]:
         for method in self._methods:
             yield from method.find_calls()
 
-    @override
     def find_predecessors(self) -> Generator[str, None, None]:
         for base in self._nodes[0].bases:
             for node in walk(base):
@@ -91,21 +105,28 @@ class ClassBlock(Block):
     def name(self):
         return self._nodes[0].name
 
+    @property
+    def method_blocks(self) -> Collection[Block]:
+        return self._methods
+
 
 class FunctionBlock(Block):
     _nodes: list[Function]
 
     def __init__(self, node: Function, source_lines: list[str]):
-        super().__init__(node, source_lines)
+        super().__init__(node)
+        self.start, self.end = determine_line_range(node, source_lines)
+        self._source_lines = source_lines
 
-    @override
     def append(self, node: AST) -> bool:
         if isinstance(node, (FunctionDef, AsyncFunctionDef)) and node.name == self._nodes[0].name:
             self._nodes.append(node)
+            start, end = determine_line_range(node, self._source_lines)
+            self.start = min(self.start, start)
+            self.end = max(self.end, end)
             return True
         return False
 
-    @override
     def find_calls(self) -> Generator[Call, None, None]:
         for root in self._nodes:
             subtrees = [*root.body, root.args, *([] if root.returns is None else [root.returns])]
@@ -114,7 +135,6 @@ class FunctionBlock(Block):
                     if isinstance(node, Call):
                         yield node
 
-    @override
     def find_predecessors(self) -> Generator[str, None, None]:
         # Look for type hints in the function signature.
         # Prior to Python 3.14, names referenced in type hints must be declared first.
@@ -135,7 +155,6 @@ class FunctionBlock(Block):
                     if isinstance(node, Name):
                         yield node.id
 
-    @override
     @property
     def is_pytest_fixture(self) -> bool:
         node = self._nodes[0]
