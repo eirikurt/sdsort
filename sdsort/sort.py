@@ -1,11 +1,12 @@
-from ast import AsyncFunctionDef, Attribute, Call, ClassDef, FunctionDef, Module, Name, parse, walk
+from ast import Attribute, Call, ClassDef, Module, Name, parse
 from collections import defaultdict
 from itertools import chain, takewhile
 from pathlib import Path
-from typing import Callable, Iterable, Optional
+from typing import Callable, Optional, Union
 
 from .block import Block, ClassBlock, FunctionBlock, block_for
 from .format import normalize_blank_lines
+from .graph import AcyclicGraph
 from .utils.ast import (
     find_start_of_class_body,
     get_class_nodes,
@@ -58,80 +59,26 @@ def step_down_sort(python_file_path: str | Path) -> Optional[str]:
 
 def _sort_top_level_blocks(source_lines: list[str], syntax_tree: Module) -> list[str]:
     """Sort top-level functions/classes according to step-down rule."""
-    blocks_by_name = _find_top_level_blocks(syntax_tree, source_lines)
+    blocks = _find_top_level_blocks(syntax_tree, source_lines)
 
-    if not blocks_by_name:
+    if not blocks:
         return source_lines
 
-    # Barriers (module-level code that calls functions) divide the file into zones.
-    # Functions within each zone are sorted independently, ensuring that functions
-    # called at module level remain defined before the barrier that calls them.
-    barrier_line_numbers = sorted(line_no for line_no, _ in _find_barriers(syntax_tree, blocks_by_name))
-
-    sorted_dict: BlocksByName = {}
-    for zone_blocks in _group_by_zone(blocks_by_name, source_lines, barrier_line_numbers):
-        deps = _find_dependencies(zone_blocks, _function_call_target)
-        zone_sorted: BlocksByName = {}
-        for name in zone_blocks:
-            _depth_first_sort(name, zone_blocks, deps, zone_sorted, [])
-        sorted_dict.update(zone_sorted)
-
-    return _rearrange_lines(source_lines, blocks_by_name, sorted_dict)
+    deps = _find_dependencies(blocks)
+    sorted_blocks: list[Block] = []
+    for block in blocks:
+        _depth_first_sort(block, blocks, deps, sorted_blocks, [])
+    return _rearrange_lines(source_lines, blocks, sorted_blocks)
 
 
-def _find_top_level_blocks(syntax_tree: Module, source_lines: list[str]) -> BlocksByName:
-    blocks = defaultdict[str, list[Block]](list)
+def _find_top_level_blocks(syntax_tree: Module, source_lines: list[str]):
+    blocks: list[Block] = []
+    current_block: Union[Block, None] = None
     for node in syntax_tree.body:
-        block = block_for(node, source_lines)
-        if block:
-            blocks[block.name].append(block)
+        if current_block is None or not current_block.append(node):
+            current_block = block_for(node, source_lines)
+            blocks.append(current_block)
     return blocks
-
-
-def _find_barriers(syntax_tree: Module, blocks_by_name: BlocksByName) -> list[tuple[int, set[str]]]:
-    """Find module-level statements that call functions directly.
-
-    Returns a list of (line_number, set of function names called) for each barrier.
-    A barrier is any non-function-def statement that invokes a function.
-    """
-    barriers: list[tuple[int, set[str]]] = []
-    for node in syntax_tree.body:
-        if isinstance(node, (FunctionDef, AsyncFunctionDef, ClassDef)):
-            continue
-
-        called_funcs: set[str] = set()
-        for child in walk(node):
-            if isinstance(child, Call) and isinstance(child.func, Name):
-                if child.func.id in blocks_by_name:
-                    called_funcs.add(child.func.id)
-
-        if called_funcs:
-            # TODO: make 0 based for consistency
-            barriers.append((node.lineno, called_funcs))
-
-    return barriers
-
-
-def _group_by_zone(
-    blocks_by_name: BlocksByName, source_lines: list[str], barrier_line_numbers: list[int]
-) -> Iterable[BlocksByName]:
-    """Group functions into zones separated by barrier lines.
-
-    Each zone contains the functions that appear between two consecutive barriers
-    (or before the first / after the last). Functions within a zone can be freely
-    reordered without crossing a barrier.
-    """
-    zones: list[BlocksByName] = [{} for _ in range(len(barrier_line_numbers) + 1)]
-    for name, blocks in blocks_by_name.items():
-        block_start = blocks[0].start
-        # barrier_lines are 1-based (AST), func_start is 0-based — the off-by-one
-        # means `<` is the correct comparison (a function at 0-based line N is before
-        # a barrier at 1-based line N+1).
-        zone_idx = next(
-            (i for i, bl in enumerate(barrier_line_numbers) if block_start < bl), len(barrier_line_numbers)
-        )
-        zones[zone_idx][name] = blocks
-    return [z for z in zones if z]
 
 
 def _sort_methods_within_class(source_lines: list[str], class_def: ClassDef) -> list[str]:
@@ -158,36 +105,26 @@ def _sort_methods_within_class(source_lines: list[str], class_def: ClassDef) -> 
 
 
 def _find_dependencies(
-    blocks_by_name: BlocksByName,
+    blocks: list[Block],
     get_call_target: Callable[[Call], Optional[str]],
-) -> dict[str, list[str]]:
-    """Find dependencies between functions/methods.
+):
+    dependencies = AcyclicGraph()
+    blocks_by_name = {block.name: block for block in blocks if isinstance(block, (ClassBlock, FunctionBlock))}
 
-    Note: decorator_list is excluded from the walk. Decorator arguments are evaluated
-    at definition time, so any functions they call must already be defined before the
-    decorated function — treating them as step-down dependencies would invert that.
-    """
-    dependencies: dict[str, list[str]] = defaultdict(list)
-    for block in chain(*blocks_by_name.values()):
-        # Base classes must appear before subclasses
-        # TODO: It would probably be more efficient to check if a class has a parent class, then go search for that
-        if isinstance(block, ClassBlock):
-            for subclass_block in _find_subclasses(block, blocks_by_name):
-                dependencies[block.name].append(subclass_block.name)
+    for block in blocks:
+        for name in block.find_predecessors():
+            predecessor_block = blocks_by_name.get(name)
+            if predecessor_block is not None:
+                dependencies.add_edge(_from=predecessor_block, to=block)
 
-        for ref_name in block.find_type_refs():
-            if ref_name in blocks_by_name and ref_name != block.name and block.name not in dependencies[ref_name]:
-                dependencies[ref_name].append(block.name)
-
+    for block in blocks:
         for call in block.find_calls():
             target = get_call_target(call)
-            if (
-                target is not None
-                and target in blocks_by_name
-                and not any(b.is_pytest_fixture for b in blocks_by_name[target])
-                and target not in dependencies[block.name]
-            ):
-                dependencies[block.name].append(target)
+            if target is not None:
+                successor_block = blocks_by_name.get(target)
+                if successor_block is not None and not successor_block.is_pytest_fixture:
+                    dependencies.add_edge(_from=block, to=successor_block)
+
     return dependencies
 
 
