@@ -213,7 +213,11 @@ def _ensure_number_of_leading_blank_lines_remains_unchanged(
 
 def _method_call_target(node: Call) -> Optional[str]:
     """Extract target name from self.method() calls."""
-    return node.func.attr if isinstance(node.func, Attribute) else None
+    return (
+        node.func.attr
+        if isinstance(node.func, Attribute) and isinstance(node.func.value, Name) and node.func.value.id == "self"
+        else None
+    )
 
 
 def _function_call_target(node: Call) -> Optional[str]:
