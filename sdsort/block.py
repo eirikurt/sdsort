@@ -60,8 +60,8 @@ class StatementBlock(Block):
     def find_predecessors(self) -> Generator[str, None, None]:
         for node in self._nodes:
             for child in walk(node):
-                if isinstance(child, Call) and isinstance(child.func, Name):
-                    yield child.func.id
+                if isinstance(child, Name):
+                    yield child.id
 
     def find_calls(self) -> Generator[Call, None, None]:
         yield from []
