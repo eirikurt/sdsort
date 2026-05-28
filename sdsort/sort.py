@@ -20,7 +20,7 @@ def step_down_sort(python_file_path: str | Path) -> Optional[str]:
     syntax_tree = parse(source, filename=python_file_path)
     source_lines = source.splitlines()
 
-    # First, sort top-level functions
+    # First, sort top-level blocks (functions and classes)
     modified_lines = _sort_top_level_blocks(source_lines, syntax_tree)
 
     # Re-parse to get updated line numbers for class sorting
