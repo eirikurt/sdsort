@@ -28,7 +28,6 @@ class Block(ABC):
     def append(self, node: AST) -> bool:
         raise NotImplementedError
 
-    # XXX: rename to find_successors?
     @abstractmethod
     def find_calls(self) -> Generator[Call, None, None]:
         raise NotImplementedError
