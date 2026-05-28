@@ -155,14 +155,14 @@ def _rearrange_lines(
         pos = orig_block.end
 
         if sort_idx >= len(sorted_blocks) or orig_block != sorted_blocks[sort_idx]:
-            # The next sorted function hasn't reached its trigger slot yet; skip this slot.
-            # Functions emitted early by the while-loop below also land here.
+            # The next sorted block hasn't reached its trigger slot yet; skip this slot.
+            # Blocks emitted early by the while-loop below also land here.
             continue
 
         result.extend(lines_of(sorted_blocks[sort_idx]))
         sort_idx += 1
 
-        # A function that originally appeared before this slot should follow it immediately,
+        # A block that originally appeared before this slot should follow it immediately,
         # because its own slot was already passed (and skipped) earlier in the walk.
         while sort_idx < len(sorted_blocks) and sorted_blocks[sort_idx].start < orig_block.start:
             result.extend(lines_of(sorted_blocks[sort_idx]))
