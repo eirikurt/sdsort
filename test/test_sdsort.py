@@ -36,6 +36,7 @@ TEST_CASES_DIR = Path("test", "cases")
         "multiline_string",
         "circular_class",
         "flask_cli",
+        "flask_tag",
     ],
 )
 def test_all_cases(test_case: str):
