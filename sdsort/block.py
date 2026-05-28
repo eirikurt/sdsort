@@ -46,13 +46,13 @@ class StatementBlock(Block):
 
     def __init__(self, node: stmt):
         super().__init__(node)
-        self.start = node.lineno
+        self.start = node.lineno - 1
         self.end = node.end_lineno or node.lineno
 
     def append(self, node: AST) -> bool:
         if isinstance(node, stmt) and not isinstance(node, (ClassDef, FunctionDef, AsyncFunctionDef)):
             self._nodes.append(node)
-            self.start = min(self.start, node.lineno)
+            self.start = min(self.start, node.lineno - 1)
             self.end = max(self.end, node.end_lineno or node.lineno)
             return True
         return False
@@ -74,7 +74,6 @@ class ClassBlock(Block):
         super().__init__(node)
         self.start, self.end = determine_line_range(node, source_lines)
         method_nodes = get_method_nodes(node)
-        current_block: Union[Block, None] = None
         self._methods: list[FunctionBlock] = []
         current_block: Union[Block, None] = None
         for method_node in method_nodes:
