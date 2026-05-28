@@ -70,12 +70,6 @@ def _find_top_level_blocks(syntax_tree: Module, source_lines: list[str]):
             current_block = block_for(node, source_lines)
             blocks.append(current_block)
 
-    for block in blocks:
-        if isinstance(block, StatementBlock):
-            pass
-        else:
-            pass
-
     return blocks
 
 
