@@ -5,7 +5,7 @@ from .block import Block
 
 class AcyclicGraph:
     def __init__(self) -> None:
-        self._edges = defaultdict[Block, list[Block]](list)
+        self._edges: defaultdict[Block, list[Block]] = defaultdict(list)
 
     def add_edge(self, *, _from: Block, to: Block) -> bool:
         if to in self._edges[_from]:
