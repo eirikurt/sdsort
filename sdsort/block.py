@@ -96,6 +96,13 @@ class ClassBlock(Block):
                 if isinstance(node, Attribute):
                     yield node.attr
 
+        # XXX: this should probably be narrowed to only consider type hints and names on the right hand side of assignments
+        for statement in self._nodes[0].body:
+            if not isinstance(statement, (FunctionDef, AsyncFunctionDef)):
+                for node in walk(statement):
+                    if isinstance(node, Name):
+                        yield node.id
+
         for method in self._methods:
             yield from method.find_predecessors()
 
