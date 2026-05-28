@@ -14,8 +14,6 @@ from .utils.ast import (
 )
 from .utils.file import read_file
 
-BlocksByName = dict[str, list[Block]]
-
 
 def step_down_sort(python_file_path: str | Path) -> Optional[str]:
     source = read_file(python_file_path)
