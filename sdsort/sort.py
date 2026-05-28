@@ -4,7 +4,7 @@ from itertools import takewhile
 from pathlib import Path
 from typing import Callable, Optional, Union
 
-from .block import Block, ClassBlock, FunctionBlock, StatementBlock, block_for
+from .block import Block, ClassBlock, FunctionBlock, block_for
 from .format import normalize_blank_lines
 from .graph import AcyclicGraph
 from .utils.ast import (
