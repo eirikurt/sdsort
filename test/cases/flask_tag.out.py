@@ -19,11 +19,6 @@ class JSONTag:
         """Check if the given value should be tagged by this tag."""
         raise NotImplementedError
 
-    def to_json(self, value: t.Any) -> t.Any:
-        """Convert the Python object to an object that is a valid JSON type.
-        The tag will be added later."""
-        raise NotImplementedError
-
     def to_python(self, value: t.Any) -> t.Any:
         """Convert the JSON representation back to the correct type. The tag
         will already be removed."""
@@ -33,6 +28,11 @@ class JSONTag:
         """Convert the value to a valid JSON type and add the tag structure
         around it."""
         return {self.key: self.to_json(value)}
+
+    def to_json(self, value: t.Any) -> t.Any:
+        """Convert the Python object to an object that is a valid JSON type.
+        The tag will be added later."""
+        raise NotImplementedError
 
 
 class TagDict(JSONTag):
@@ -124,11 +124,31 @@ class TaggedJSONSerializer:
         else:
             self.order.insert(index, tag)
 
+    def dumps(self, value: t.Any) -> str:
+        """Tag the value and dump it to a compact JSON string."""
+        return dumps(self.tag(value), separators=(",", ":"))
+
     def tag(self, value: t.Any) -> t.Any:
         """Convert a value to a tagged representation if necessary."""
         for tag in self.order:
             if tag.check(value):
                 return tag.tag(value)
+
+        return value
+
+    def loads(self, value: str) -> t.Any:
+        """Load data from a JSON string and deserialized any tagged objects."""
+        return self._untag_scan(loads(value))
+
+    def _untag_scan(self, value: t.Any) -> t.Any:
+        if isinstance(value, dict):
+            # untag each item recursively
+            value = {k: self._untag_scan(v) for k, v in value.items()}
+            # untag the dict itself
+            value = self.untag(value)
+        elif isinstance(value, list):
+            # untag each item recursively
+            value = [self._untag_scan(item) for item in value]
 
         return value
 
@@ -143,23 +163,3 @@ class TaggedJSONSerializer:
             return value
 
         return self.tags[key].to_python(value[key])
-
-    def _untag_scan(self, value: t.Any) -> t.Any:
-        if isinstance(value, dict):
-            # untag each item recursively
-            value = {k: self._untag_scan(v) for k, v in value.items()}
-            # untag the dict itself
-            value = self.untag(value)
-        elif isinstance(value, list):
-            # untag each item recursively
-            value = [self._untag_scan(item) for item in value]
-
-        return value
-
-    def dumps(self, value: t.Any) -> str:
-        """Tag the value and dump it to a compact JSON string."""
-        return dumps(self.tag(value), separators=(",", ":"))
-
-    def loads(self, value: str) -> t.Any:
-        """Load data from a JSON string and deserialized any tagged objects."""
-        return self._untag_scan(loads(value))

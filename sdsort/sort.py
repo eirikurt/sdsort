@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Callable, Optional, Union
 
 from .block import Block, ClassBlock, FunctionBlock, block_for
+from .context import Context, gather_context
 from .format import normalize_blank_lines
 from .graph import AcyclicGraph
 from .utils.ast import (
@@ -18,10 +19,11 @@ from .utils.file import read_file
 def step_down_sort(python_file_path: str | Path) -> Optional[str]:
     source = read_file(python_file_path)
     syntax_tree = parse(source, filename=python_file_path)
+    context = gather_context(syntax_tree)
     source_lines = source.splitlines()
 
     # First, sort top-level blocks (functions and classes)
-    modified_lines = _sort_top_level_blocks(source_lines, syntax_tree)
+    modified_lines = _sort_top_level_blocks(source_lines, syntax_tree, context)
 
     # Re-parse to get updated line numbers for class sorting
     modified_source = "\n".join(modified_lines) + "\n"
@@ -35,7 +37,7 @@ def step_down_sort(python_file_path: str | Path) -> Optional[str]:
         final_lines.extend(modified_lines[len(final_lines) : class_body_start])
 
         # Copy class after sorting its methods
-        final_lines.extend(_sort_methods_within_class(modified_lines, cls))
+        final_lines.extend(_sort_methods_within_class(modified_lines, cls, context))
 
     # Copy remainder of file
     final_lines.extend(modified_lines[len(final_lines) :])
@@ -46,9 +48,9 @@ def step_down_sort(python_file_path: str | Path) -> Optional[str]:
         return None
 
 
-def _sort_top_level_blocks(source_lines: list[str], syntax_tree: Module) -> list[str]:
+def _sort_top_level_blocks(source_lines: list[str], syntax_tree: Module, context: Context) -> list[str]:
     """Sort top-level functions/classes according to step-down rule."""
-    blocks = _find_top_level_blocks(syntax_tree, source_lines)
+    blocks = _find_top_level_blocks(syntax_tree, source_lines, context)
 
     if not blocks:
         return source_lines
@@ -60,22 +62,22 @@ def _sort_top_level_blocks(source_lines: list[str], syntax_tree: Module) -> list
     return _rearrange_lines(source_lines, blocks, sorted_blocks)
 
 
-def _find_top_level_blocks(syntax_tree: Module, source_lines: list[str]):
+def _find_top_level_blocks(syntax_tree: Module, source_lines: list[str], context: Context):
     blocks: list[Block] = []
     current_block: Union[Block, None] = None
     for node in syntax_tree.body:
         if current_block is None or not current_block.append(node):
-            current_block = block_for(node, source_lines)
+            current_block = block_for(node, source_lines, context)
             blocks.append(current_block)
 
     return blocks
 
 
-def _sort_methods_within_class(source_lines: list[str], class_def: ClassDef) -> list[str]:
+def _sort_methods_within_class(source_lines: list[str], class_def: ClassDef, context: Context) -> list[str]:
     # TODO: recursively sort methods within nested classes?
 
     # Find methods
-    blocks = ClassBlock(class_def, source_lines).method_blocks
+    blocks = ClassBlock(class_def, source_lines, context).method_blocks
 
     # Build dependency graph among methods
     dependencies = _find_dependencies(blocks, _method_call_target)

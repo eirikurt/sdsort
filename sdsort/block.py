@@ -3,6 +3,7 @@ from ast import AST, AsyncFunctionDef, Attribute, Call, ClassDef, Constant, Func
 from collections.abc import Collection
 from typing import Generator, Union
 
+from .context import Context
 from .utils.ast import (
     Function,
     determine_line_range,
@@ -10,17 +11,18 @@ from .utils.ast import (
 )
 
 
-def block_for(node: stmt, source_lines: list[str]):
+def block_for(node: stmt, source_lines: list[str], context: Context):
     if isinstance(node, (FunctionDef, AsyncFunctionDef)):
-        return FunctionBlock(node, source_lines)
+        return FunctionBlock(node, source_lines, context)
     elif isinstance(node, ClassDef):
-        return ClassBlock(node, source_lines)
-    return StatementBlock(node)
+        return ClassBlock(node, source_lines, context)
+    return StatementBlock(node, context)
 
 
 class Block(ABC):
-    def __init__(self, node: AST):
+    def __init__(self, node: AST, context: Context):
         self._nodes = [node]
+        self._context = context
         self.start = -1
         self.end = -1
 
@@ -44,8 +46,8 @@ class Block(ABC):
 class StatementBlock(Block):
     _nodes: list[stmt]
 
-    def __init__(self, node: stmt):
-        super().__init__(node)
+    def __init__(self, node: stmt, context: Context):
+        super().__init__(node, context)
         self.start = node.lineno - 1
         self.end = node.end_lineno or node.lineno
 
@@ -70,15 +72,15 @@ class StatementBlock(Block):
 class ClassBlock(Block):
     _nodes: list[ClassDef]
 
-    def __init__(self, node: ClassDef, source_lines: list[str]):
-        super().__init__(node)
+    def __init__(self, node: ClassDef, source_lines: list[str], context: Context):
+        super().__init__(node, context)
         self.start, self.end = determine_line_range(node, source_lines)
         method_nodes = get_method_nodes(node)
         self._methods: list[FunctionBlock] = []
         current_block: Union[Block, None] = None
         for method_node in method_nodes:
             if current_block is None or not current_block.append(method_node):
-                current_block = FunctionBlock(method_node, source_lines)
+                current_block = FunctionBlock(method_node, source_lines, self._context)
                 self._methods.append(current_block)
 
     def append(self, node: AST) -> bool:
@@ -118,8 +120,8 @@ class ClassBlock(Block):
 class FunctionBlock(Block):
     _nodes: list[Function]
 
-    def __init__(self, node: Function, source_lines: list[str]):
-        super().__init__(node)
+    def __init__(self, node: Function, source_lines: list[str], context: Context):
+        super().__init__(node, context)
         self.start, self.end = determine_line_range(node, source_lines)
         self._source_lines = source_lines
 
@@ -141,9 +143,10 @@ class FunctionBlock(Block):
                         yield node
 
     def find_predecessors(self) -> Generator[str, None, None]:
-        # Look for type hints in the function signature.
-        # Prior to Python 3.14, names referenced in type hints must be declared first.
-        # TODO: relax this for Python >=3.14
+        if not self._context.deferred_annotations:
+            yield from self._get_type_annotations()
+
+    def _get_type_annotations(self):
         for root in self._nodes:
             all_args = [*root.args.posonlyargs, *root.args.args, *root.args.kwonlyargs]
             if root.args.vararg:
