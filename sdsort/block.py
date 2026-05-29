@@ -48,6 +48,8 @@ class StatementBlock(Block):
 
     def __init__(self, node: stmt, context: Context):
         super().__init__(node, context)
+        # TODO: extend to capture leading comments
+        # TODO: gather list of names defined in the statement block. Consider them when building the dependency graph.
         self.start = node.lineno - 1
         self.end = node.end_lineno or node.lineno
 
