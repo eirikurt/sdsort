@@ -8,7 +8,7 @@ def main():
     print(input_path)
     source = read_file(input_path)
     syntax_tree = parse(source, filename=input_path)
-    print(dump(syntax_tree))
+    print(dump(syntax_tree, indent=2))
 
 
 def read_file(file_path: str | Path) -> str:
