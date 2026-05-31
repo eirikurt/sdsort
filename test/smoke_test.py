@@ -42,7 +42,6 @@ DEFAULT_REPOS: list[tuple[str, str]] = [
     ("databases", "https://github.com/encode/databases"),
     ("fastapi", "https://github.com/fastapi/fastapi"),
 ]
-# TODO: add databases?, FastAPI
 
 
 @dataclass
