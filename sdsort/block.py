@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from ast import AST, AsyncFunctionDef, Attribute, Call, ClassDef, Constant, FunctionDef, Name, stmt, walk
+from ast import AST, Assign, AsyncFunctionDef, Attribute, Call, ClassDef, Constant, FunctionDef, Name, stmt, walk
 from collections.abc import Collection
 from typing import Generator, Union
 
@@ -42,33 +42,50 @@ class Block(ABC):
     def is_pytest_fixture(self) -> bool:
         return False
 
+    @property
+    @abstractmethod
+    def names(self) -> Collection[str]:
+        raise NotImplementedError
+
 
 class StatementBlock(Block):
     _nodes: list[stmt]
+    _names: set[str]
 
     def __init__(self, node: stmt, context: Context):
         super().__init__(node, context)
         # TODO: extend to capture leading comments
-        # TODO: gather list of names defined in the statement block. Consider them when building the dependency graph.
         self.start = node.lineno - 1
         self.end = node.end_lineno or node.lineno
+        self._names = set(self._extract_names(node))
 
     def append(self, node: AST) -> bool:
         if isinstance(node, stmt) and not isinstance(node, (ClassDef, FunctionDef, AsyncFunctionDef)):
             self._nodes.append(node)
             self.start = min(self.start, node.lineno - 1)
             self.end = max(self.end, node.end_lineno or node.lineno)
+            self._names.update(self._extract_names(node))
             return True
         return False
+
+    def _extract_names(self, node: AST):
+        if isinstance(node, Assign):
+            for target in node.targets:
+                if isinstance(target, Name):
+                    yield target.id
 
     def find_predecessors(self) -> Generator[str, None, None]:
         for node in self._nodes:
             for child in walk(node):
-                if isinstance(child, Name):
+                if isinstance(child, Name) and child.id not in self._names:
                     yield child.id
 
     def find_calls(self) -> Generator[Call, None, None]:
         yield from []
+
+    @property
+    def names(self) -> Collection[str]:
+        return self._names
 
 
 class ClassBlock(Block):
@@ -111,8 +128,8 @@ class ClassBlock(Block):
             yield from method.find_predecessors()
 
     @property
-    def name(self):
-        return self._nodes[0].name
+    def names(self):
+        return [n.name for n in self._nodes]
 
     @property
     def method_blocks(self) -> Collection[Block]:
@@ -145,6 +162,12 @@ class FunctionBlock(Block):
                         yield node
 
     def find_predecessors(self) -> Generator[str, None, None]:
+        for function in self._nodes:
+            for decorator in function.decorator_list:
+                for node in walk(decorator):
+                    if isinstance(node, Name):
+                        yield node.id
+
         if not self._context.deferred_annotations:
             yield from self._get_type_annotations()
 
@@ -178,5 +201,5 @@ class FunctionBlock(Block):
         return False
 
     @property
-    def name(self):
-        return self._nodes[0].name
+    def names(self):
+        return [n.name for n in self._nodes]

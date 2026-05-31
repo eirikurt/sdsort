@@ -4,7 +4,7 @@ from itertools import takewhile
 from pathlib import Path
 from typing import Callable, Optional, Union
 
-from .block import Block, ClassBlock, FunctionBlock, block_for
+from .block import Block, ClassBlock, block_for
 from .context import Context, gather_context
 from .format import normalize_blank_lines
 from .graph import AcyclicGraph
@@ -98,7 +98,7 @@ def _find_dependencies(
     get_call_target: Callable[[Call], Optional[str]],
 ):
     dependencies = AcyclicGraph()
-    blocks_by_name = {block.name: block for block in blocks if isinstance(block, (ClassBlock, FunctionBlock))}
+    blocks_by_name = {name: block for block in blocks for name in block.names}
 
     for block in blocks:
         for name in block.find_predecessors():
