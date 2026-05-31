@@ -34,7 +34,15 @@ DEFAULT_REPOS: list[tuple[str, str]] = [
     ("flask", "https://github.com/pallets/flask"),
     ("requests", "https://github.com/psf/requests"),
     ("black", "https://github.com/psf/black"),
+    ("belugas", "https://github.com/OutSquareCapital/belugas"),
+    ("framelib", "https://github.com/OutSquareCapital/framelib"),
+    ("pyochain", "https://github.com/OutSquareCapital/pyochain"),
+    ("starlette", "https://github.com/Kludex/starlette"),
+    ("uvicorn", "https://github.com/Kludex/uvicorn"),
+    ("databases", "https://github.com/encode/databases"),
+    ("fastapi", "https://github.com/fastapi/fastapi"),
 ]
+# TODO: add databases?, FastAPI
 
 
 @dataclass
