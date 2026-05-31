@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from ast import (
     AST,
+    AnnAssign,
     Assign,
     AsyncFunctionDef,
     Attribute,
@@ -21,6 +22,7 @@ from .context import Context
 from .utils.ast import (
     Function,
     determine_line_range,
+    find_first_line,
     get_method_nodes,
 )
 
@@ -31,8 +33,8 @@ def block_for(node: stmt, source_lines: list[str], context: Context):
     elif isinstance(node, ClassDef):
         return ClassBlock(node, source_lines, context)
     elif isinstance(node, (Import, ImportFrom)):
-        return ImportBlock(node, context)
-    return StatementBlock(node, context)
+        return ImportBlock(node, source_lines, context)
+    return StatementBlock(node, source_lines, context)
 
 
 class Block(ABC):
@@ -67,16 +69,14 @@ class Block(ABC):
 class ImportBlock(Block):
     _nodes: list[Union[Import, ImportFrom]]
 
-    def __init__(self, node: Union[Import, ImportFrom], context: Context):
+    def __init__(self, node: Union[Import, ImportFrom], source_lines: list[str], context: Context):
         super().__init__(node, context)
-        # TODO: extend to capture leading comments
-        self.start = node.lineno - 1
+        self.start = find_first_line(node, source_lines)
         self.end = node.end_lineno or node.lineno
 
     def append(self, node: AST) -> bool:
         if isinstance(node, (Import, ImportFrom)):
             self._nodes.append(node)
-            self.start = min(self.start, node.lineno - 1)
             self.end = max(self.end, node.end_lineno or node.lineno)
             return True
         return False
@@ -91,15 +91,15 @@ class ImportBlock(Block):
     def names(self) -> Collection[str]:
         return []
 
+# TODO: add separate assignment block, don't lump together with other statements
 
 class StatementBlock(Block):
     _nodes: list[stmt]
     _names: set[str]
 
-    def __init__(self, node: stmt, context: Context):
+    def __init__(self, node: stmt, source_lines: list[str], context: Context):
         super().__init__(node, context)
-        # TODO: extend to capture leading comments
-        self.start = node.lineno - 1
+        self.start = find_first_line(node, source_lines)
         self.end = node.end_lineno or node.lineno
         self._names = set(self._extract_names(node))
 
@@ -108,7 +108,6 @@ class StatementBlock(Block):
             node, (ClassDef, FunctionDef, AsyncFunctionDef, Import, ImportFrom)
         ):
             self._nodes.append(node)
-            self.start = min(self.start, node.lineno - 1)
             self.end = max(self.end, node.end_lineno or node.lineno)
             self._names.update(self._extract_names(node))
             return True
@@ -119,6 +118,10 @@ class StatementBlock(Block):
             for target in node.targets:
                 if isinstance(target, Name):
                     yield target.id
+        if isinstance(node, AnnAssign):
+            if isinstance(node.target, Name):
+                yield node.target.id
+
 
     def find_predecessors(self) -> Generator[str, None, None]:
         for node in self._nodes:

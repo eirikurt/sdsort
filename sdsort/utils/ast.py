@@ -1,4 +1,4 @@
-from ast import AST, AsyncFunctionDef, ClassDef, FunctionDef, Module, walk
+from ast import AST, AsyncFunctionDef, ClassDef, FunctionDef, Module, stmt, walk
 from itertools import takewhile
 from typing import Protocol, TypeGuard, Union
 
@@ -25,8 +25,10 @@ def determine_line_range(class_or_function: ClassOrFunction, source_lines: list[
     return start, stop
 
 
-def find_first_line(class_or_function: ClassOrFunction, source_lines: list[str]) -> int:
-    start = min((d.lineno for d in class_or_function.decorator_list), default=class_or_function.lineno)
+def find_first_line(node: stmt, source_lines: list[str]) -> int:
+    start = node.lineno
+    if isinstance(node, (ClassDef, FunctionDef, AsyncFunctionDef)):
+        start = min((d.lineno for d in node.decorator_list), default=start)
 
     # AST line numbers are 1-based. Subtract one from the start position to make it 0-based
     start -= 1
