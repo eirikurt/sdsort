@@ -1,5 +1,19 @@
 from abc import ABC, abstractmethod
-from ast import AST, Assign, AsyncFunctionDef, Attribute, Call, ClassDef, Constant, FunctionDef, Name, stmt, walk
+from ast import (
+    AST,
+    Assign,
+    AsyncFunctionDef,
+    Attribute,
+    Call,
+    ClassDef,
+    Constant,
+    FunctionDef,
+    Import,
+    ImportFrom,
+    Name,
+    stmt,
+    walk,
+)
 from collections.abc import Collection
 from typing import Generator, Union
 
@@ -16,6 +30,8 @@ def block_for(node: stmt, source_lines: list[str], context: Context):
         return FunctionBlock(node, source_lines, context)
     elif isinstance(node, ClassDef):
         return ClassBlock(node, source_lines, context)
+    elif isinstance(node, (Import, ImportFrom)):
+        return ImportBlock(node, context)
     return StatementBlock(node, context)
 
 
@@ -48,6 +64,34 @@ class Block(ABC):
         raise NotImplementedError
 
 
+class ImportBlock(Block):
+    _nodes: list[Union[Import, ImportFrom]]
+
+    def __init__(self, node: Union[Import, ImportFrom], context: Context):
+        super().__init__(node, context)
+        # TODO: extend to capture leading comments
+        self.start = node.lineno - 1
+        self.end = node.end_lineno or node.lineno
+
+    def append(self, node: AST) -> bool:
+        if isinstance(node, (Import, ImportFrom)):
+            self._nodes.append(node)
+            self.start = min(self.start, node.lineno - 1)
+            self.end = max(self.end, node.end_lineno or node.lineno)
+            return True
+        return False
+
+    def find_predecessors(self) -> Generator[str, None, None]:
+        yield from []
+
+    def find_calls(self) -> Generator[Call, None, None]:
+        yield from []
+
+    @property
+    def names(self) -> Collection[str]:
+        return []
+
+
 class StatementBlock(Block):
     _nodes: list[stmt]
     _names: set[str]
@@ -60,7 +104,9 @@ class StatementBlock(Block):
         self._names = set(self._extract_names(node))
 
     def append(self, node: AST) -> bool:
-        if isinstance(node, stmt) and not isinstance(node, (ClassDef, FunctionDef, AsyncFunctionDef)):
+        if isinstance(node, stmt) and not isinstance(
+            node, (ClassDef, FunctionDef, AsyncFunctionDef, Import, ImportFrom)
+        ):
             self._nodes.append(node)
             self.start = min(self.start, node.lineno - 1)
             self.end = max(self.end, node.end_lineno or node.lineno)
