@@ -20,7 +20,7 @@ from .utils.file import read_file
 def step_down_sort(python_file_path: str | Path) -> Optional[str]:
     source = read_file(python_file_path)
     syntax_tree = parse(source, filename=python_file_path)
-    context = gather_context(syntax_tree)
+    context = gather_context(syntax_tree, Path(python_file_path).resolve())
     source_lines = source.splitlines()
 
     # First, sort top-level blocks (functions and classes)
