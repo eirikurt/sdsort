@@ -32,13 +32,14 @@ def main(paths: tuple[str, ...], check: bool):
         raise SystemExit(1)
 
 
-@dataclass
-class Results:
-    modified_files: list[str] = field(default_factory=list)
-    pristine_files: list[str] = field(default_factory=list)
-
-    def __len__(self):
-        return len(self.modified_files) + len(self.pristine_files)
+def _expand_file_paths(paths: tuple[str, ...]) -> Iterable[str]:
+    file_paths = []
+    for path in paths:
+        if os.path.isdir(path):
+            file_paths.extend(glob(os.path.join(path, "**/*.py"), recursive=True))
+        else:
+            file_paths.append(path)
+    return file_paths
 
 
 def _sort_files(file_paths: list[str], check: bool):
@@ -55,6 +56,15 @@ def _sort_files(file_paths: list[str], check: bool):
             results.pristine_files.append(file_path)
 
     return results
+
+
+@dataclass
+class Results:
+    modified_files: list[str] = field(default_factory=list)
+    pristine_files: list[str] = field(default_factory=list)
+
+    def __len__(self):
+        return len(self.modified_files) + len(self.pristine_files)
 
 
 def _print_results(results: Results, check: bool, duration: float):
@@ -75,13 +85,3 @@ def _print_results(results: Results, check: bool, duration: float):
         click.secho("No python files found to format", fg="yellow")
     else:
         click.secho(f"Done! Checked {pluralize(len(results), 'file')} in {duration:.2f}s", dim=True)
-
-
-def _expand_file_paths(paths: tuple[str, ...]) -> Iterable[str]:
-    file_paths = []
-    for path in paths:
-        if os.path.isdir(path):
-            file_paths.extend(glob(os.path.join(path, "**/*.py"), recursive=True))
-        else:
-            file_paths.append(path)
-    return file_paths

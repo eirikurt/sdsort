@@ -31,7 +31,13 @@ TEST_CASES_DIR = Path("test", "cases")
         "sandwiched_decorator",
         "parametrized_test",
         "overloads",
+        "type_hints",
+        "jpe",
         "multiline_string",
+        "circular_class",
+        "flask_cli",
+        "flask_tag",
+        "partial_function",
     ],
 )
 def test_all_cases(test_case: str):
