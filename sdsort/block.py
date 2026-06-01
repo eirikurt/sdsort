@@ -216,6 +216,7 @@ class FunctionBlock(Block):
                     if isinstance(node, Name):
                         yield node.id
 
+        # XXX: it is not safe to omit annotations if the function has a decorator (e.g. @inject)
         if not self._context.deferred_annotations:
             yield from self._get_type_annotations()
 
