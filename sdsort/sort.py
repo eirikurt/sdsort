@@ -1,10 +1,11 @@
 from ast import Attribute, Call, ClassDef, Module, Name, parse
+from collections import defaultdict
 from collections.abc import Collection
 from itertools import takewhile
 from pathlib import Path
 from typing import Callable, Optional, Union
 
-from .block import Block, ClassBlock, block_for
+from .block import Block, ClassBlock, StatementBlock, block_for
 from .context import Context, gather_context
 from .format import normalize_blank_lines
 from .graph import AcyclicGraph
@@ -98,21 +99,24 @@ def _find_dependencies(
     get_call_target: Callable[[Call], Optional[str]],
 ):
     dependencies = AcyclicGraph()
-    blocks_by_name = {name: block for block in blocks for name in block.names}
+
+    blocks_by_name: dict[str, list[Block]] = defaultdict(list)
+    for block in blocks:
+        for name in block.names:
+            blocks_by_name[name].append(block)
 
     for block in blocks:
         for name in block.find_predecessors():
-            predecessor_block = blocks_by_name.get(name)
-            if predecessor_block is not None:
+            for predecessor_block in blocks_by_name.get(name, []):
                 dependencies.add_edge(_from=predecessor_block, to=block)
 
     for block in blocks:
         for call in block.find_calls():
             target = get_call_target(call)
             if target is not None:
-                successor_block = blocks_by_name.get(target)
-                if successor_block is not None and not successor_block.is_pytest_fixture:
-                    dependencies.add_edge(_from=block, to=successor_block)
+                for successor_block in blocks_by_name.get(target, []):
+                    if not successor_block.is_pytest_fixture and not isinstance(successor_block, StatementBlock):
+                        dependencies.add_edge(_from=block, to=successor_block)
 
     return dependencies
 

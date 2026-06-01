@@ -91,7 +91,6 @@ class ImportBlock(Block):
     def names(self) -> Collection[str]:
         return []
 
-# TODO: add separate assignment block, don't lump together with other statements
 
 class StatementBlock(Block):
     _nodes: list[stmt]
@@ -114,14 +113,14 @@ class StatementBlock(Block):
         return False
 
     def _extract_names(self, node: AST):
-        if isinstance(node, Assign):
-            for target in node.targets:
-                if isinstance(target, Name):
-                    yield target.id
-        if isinstance(node, AnnAssign):
-            if isinstance(node.target, Name):
-                yield node.target.id
-
+        for child in walk(node):
+            if isinstance(child, Assign):
+                for target in child.targets:
+                    if isinstance(target, Name):
+                        yield target.id
+            if isinstance(child, AnnAssign):
+                if isinstance(child.target, Name):
+                    yield child.target.id
 
     def find_predecessors(self) -> Generator[str, None, None]:
         for node in self._nodes:
