@@ -5,7 +5,7 @@ from itertools import takewhile
 from pathlib import Path
 from typing import Callable, Optional, Union
 
-from .block import Block, ClassBlock, StatementBlock, block_for
+from .block import Block, ClassBlock, FunctionBlock, block_for
 from .context import Context, gather_context
 from .format import normalize_blank_lines
 from .graph import AcyclicGraph
@@ -107,6 +107,7 @@ def _find_dependencies(
 
     for block in blocks:
         for name in block.find_predecessors():
+            # XXX: filter out built-ins (e.g. str, int)?
             for predecessor_block in blocks_by_name.get(name, []):
                 dependencies.add_edge(_from=predecessor_block, to=block)
 
@@ -115,7 +116,7 @@ def _find_dependencies(
             target = get_call_target(call)
             if target is not None:
                 for successor_block in blocks_by_name.get(target, []):
-                    if not successor_block.is_pytest_fixture and not isinstance(successor_block, StatementBlock):
+                    if isinstance(successor_block, FunctionBlock) and not successor_block.is_pytest_fixture:
                         dependencies.add_edge(_from=block, to=successor_block)
 
     return dependencies
