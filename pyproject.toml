@@ -3,11 +3,10 @@ name = "sdsort"
 version = "0.5.2"
 description = "Sorts functions and class methods according to the step-down rule"
 authors = [{ name = "Eiríkur Fannar Torfason", email = "eirikur.torfason@gmail.com" }]
-requires-python = ">= 3.10"
+requires-python = ">= 3.11"
 readme = "README.md"
 classifiers = [
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
@@ -38,7 +37,7 @@ build-backend = "uv_build"
 include = ["sdsort/**/*.py", "test/**/*.py"]
 exclude = ["test/cases"]
 line-length = 115
-target-version = "py310"
+target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E4", "E7", "E9", "F", "I"]
