@@ -38,6 +38,7 @@ TEST_CASES_DIR = Path("test", "cases")
         "flask_cli",
         "flask_tag",
         "partial_function",
+        "class_attribute_name_collision",
     ],
 )
 def test_all_cases(test_case: str):
