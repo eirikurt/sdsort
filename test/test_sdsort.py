@@ -143,7 +143,7 @@ def test_check_flag_exits_cleanly_when_files_are_already_sorted(tmp_path: Path):
 @pytest.mark.parametrize(
     "requires_python,expected",
     [
-        (">=3.10", False),
+        (">=3.11", False),
         (">=3.13", False),
         (">=3.14", True),
         (">=3.14.0", True),
