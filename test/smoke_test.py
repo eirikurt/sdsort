@@ -137,6 +137,12 @@ def check_file(py_file: Path) -> tuple[bool, list[Failure]]:
     except SyntaxError:
         return False, []  # skip files that are already broken
 
+    if is_dual_section_fixture(original):
+        # black's test-data files put an input section, a `# output` marker, then the same
+        # definitions again as expected output. Every symbol is defined twice, so ruff's
+        # redefinition (F811) counts shift purely from reordering duplicates — a false signal.
+        return False, []
+
     try:
         sorted_source = step_down_sort(py_file)
     except Exception as exc:
@@ -166,6 +172,12 @@ def check_file(py_file: Path) -> tuple[bool, list[Failure]]:
         failures.append(Failure(py_file, "new ruff errors", str(new_errors)))
 
     return True, failures
+
+
+def is_dual_section_fixture(source: str) -> bool:
+    """True for black's test-data files, which separate an input section from an expected
+    output section with a `# output` marker and thus define every symbol twice."""
+    return any(line.strip() == "# output" for line in source.splitlines())
 
 
 def top_level_names(tree: ast.Module) -> set[str]:
