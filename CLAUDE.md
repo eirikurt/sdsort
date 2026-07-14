@@ -15,7 +15,7 @@ make ruff         # Format and sort imports
 make pyright      # Type check
 
 # Run a single parametrized test case
-poetry run pytest "test/test_sdsort.py::test_all_cases[single_class]" -v
+uv run pytest "test/test_sdsort.py::test_all_cases[single_class]" -v
 ```
 
 ## Architecture
