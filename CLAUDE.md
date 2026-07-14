@@ -52,5 +52,5 @@ The test runner compares `step_down_sort()` output against the `.out.py` content
 
 ## Configuration
 
-- Python ≥3.10, line length 115, strict type checking
+- Python ≥3.11, line length 115, strict type checking
 - `test/cases/` is excluded from ruff and pyright (intentional test fixtures)
