@@ -183,11 +183,7 @@ class ClassBlock(Block):
             yield from method.find_predecessors()
 
     def _reference_subtrees(self, statement: stmt) -> Generator[AST, None, None]:
-        # A class-attribute annotation (e.g. `data: Measurement`) is only a hard ordering
-        # constraint when annotations are evaluated at definition time. When they are deferred
-        # (`from __future__ import annotations` or Python >= 3.14) the name is a lazy forward
-        # reference -- common between mutually-referencing pydantic models -- so skip the
-        # annotation but still search the assigned value for genuine references.
+        # Don't consider type annotations as predecessors when their evaluation is deferred
         if isinstance(statement, AnnAssign) and self._context.deferred_annotations:
             if statement.value is not None:
                 yield statement.value
