@@ -1,3 +1,4 @@
+import sys
 from abc import ABC, abstractmethod
 from ast import (
     AST,
@@ -13,11 +14,20 @@ from ast import (
     ImportFrom,
     Name,
     Store,
+    iter_child_nodes,
     stmt,
     walk,
 )
 from collections.abc import Collection
 from typing import Generator, Union
+
+if sys.version_info >= (3, 12):
+    # PEP 695 `type X = ...` aliases (ast.TypeAlias) only exist on Python 3.12+.
+    from ast import TypeAlias
+
+    _TYPE_ALIAS_TYPES: tuple[type, ...] = (TypeAlias,)
+else:
+    _TYPE_ALIAS_TYPES: tuple[type, ...] = ()
 
 from .context import Context
 from .utils.ast import (
@@ -125,9 +135,17 @@ class StatementBlock(Block):
 
     def find_predecessors(self) -> Generator[str, None, None]:
         for node in self._nodes:
-            for child in walk(node):
-                if isinstance(child, Name) and child.id not in self._names:
-                    yield child.id
+            yield from self._find_predecessor_names(node)
+
+    def _find_predecessor_names(self, node: AST) -> Generator[str, None, None]:
+        # A PEP 695 `type X = <value>` alias evaluates <value> lazily, so names it
+        # references are not definition-order dependencies.
+        if isinstance(node, _TYPE_ALIAS_TYPES):
+            return
+        if isinstance(node, Name) and node.id not in self._names:
+            yield node.id
+        for child in iter_child_nodes(node):
+            yield from self._find_predecessor_names(child)
 
     def find_calls(self) -> Generator[Call, None, None]:
         yield from []
