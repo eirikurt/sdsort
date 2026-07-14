@@ -2,6 +2,7 @@ import tomllib
 from ast import ImportFrom, Module
 from dataclasses import dataclass
 from functools import lru_cache
+from itertools import takewhile
 from pathlib import Path
 
 
@@ -35,9 +36,23 @@ def _targets_python314_or_newer(directory: Path) -> bool:
         part = part.strip()
         if part.startswith(">="):
             version = part[2:].strip().split(".")
-            if len(version) >= 2 and int(version[0]) == 3 and int(version[1]) >= 14:
-                return True
+            if len(version) >= 2:
+                major = _leading_int(version[0])
+                minor = _leading_int(version[1])
+                if major == 3 and minor >= 14:
+                    return True
     return False
+
+
+def _leading_int(text: str) -> int:
+    """Parse the leading integer of a version segment.
+
+    PEP 440 permits pre-release specifiers in requires-python (e.g. ">=3.14a1"), so a
+    segment like "14a1" must not be passed to int() directly. Returns 0 when there is
+    no leading digit.
+    """
+    digits = "".join(takewhile(str.isdigit, text))
+    return int(digits) if digits else 0
 
 
 def _find_pyproject(directory: Path) -> Path | None:
