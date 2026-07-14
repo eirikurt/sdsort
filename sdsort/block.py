@@ -142,6 +142,11 @@ class StatementBlock(Block):
         # references are not definition-order dependencies.
         if isinstance(node, _TYPE_ALIAS_TYPES):
             return
+        if isinstance(node, AnnAssign) and self._context.deferred_annotations:
+            yield from self._find_predecessor_names(node.target)
+            if node.value is not None:
+                yield from self._find_predecessor_names(node.value)
+            return
         if isinstance(node, Name) and node.id not in self._names:
             yield node.id
         for child in iter_child_nodes(node):

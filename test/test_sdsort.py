@@ -45,6 +45,7 @@ TEST_CASES_DIR = Path("test", "cases")
         "class_attribute_references_outer_function",
         "dangling_comment_between_defs",
         "deferred_class_attribute_annotations",
+        "deferred_statement_annotation",
     ],
 )
 def test_all_cases(test_case: str):
