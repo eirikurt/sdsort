@@ -39,6 +39,7 @@ TEST_CASES_DIR = Path("test", "cases")
         "flask_tag",
         "partial_function",
         "class_attribute_name_collision",
+        "class_attribute_references_outer_function",
     ],
 )
 def test_all_cases(test_case: str):

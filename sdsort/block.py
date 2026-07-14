@@ -12,6 +12,7 @@ from ast import (
     Import,
     ImportFrom,
     Name,
+    Store,
     stmt,
     walk,
 )
@@ -165,26 +166,18 @@ class ClassBlock(Block):
                 if isinstance(node, Attribute):
                     yield node.attr
 
-        # Names assigned as class attributes are class-local, not references to
-        # top-level definitions, so they must not be treated as predecessors.
-        class_attribute_names = set(self._class_attribute_names())
+        # A class-attribute assignment target (e.g. `config` in `config: dict = ...`) is
+        # class-local, not a reference to a top-level definition, so it must not be treated
+        # as a predecessor. Names being *read* (annotations, right-hand sides) still count,
+        # even when they happen to share the target's name (e.g. `x = staticmethod(x)`).
         for statement in self._nodes[0].body:
             if not isinstance(statement, (FunctionDef, AsyncFunctionDef)):
                 for node in walk(statement):
-                    if isinstance(node, Name) and node.id not in class_attribute_names:
+                    if isinstance(node, Name) and not isinstance(node.ctx, Store):
                         yield node.id
 
         for method in self._methods:
             yield from method.find_predecessors()
-
-    def _class_attribute_names(self) -> Generator[str, None, None]:
-        for statement in self._nodes[0].body:
-            if isinstance(statement, Assign):
-                for target in statement.targets:
-                    if isinstance(target, Name):
-                        yield target.id
-            if isinstance(statement, AnnAssign) and isinstance(statement.target, Name):
-                yield statement.target.id
 
     @property
     def names(self):
