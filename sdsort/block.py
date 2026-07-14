@@ -187,13 +187,27 @@ class ClassBlock(Block):
         # as a predecessor. Names being *read* (annotations, right-hand sides) still count,
         # even when they happen to share the target's name (e.g. `x = staticmethod(x)`).
         for statement in self._nodes[0].body:
-            if not isinstance(statement, (FunctionDef, AsyncFunctionDef)):
-                for node in walk(statement):
+            if isinstance(statement, (FunctionDef, AsyncFunctionDef)):
+                continue
+            for subtree in self._reference_subtrees(statement):
+                for node in walk(subtree):
                     if isinstance(node, Name) and not isinstance(node.ctx, Store):
                         yield node.id
 
         for method in self._methods:
             yield from method.find_predecessors()
+
+    def _reference_subtrees(self, statement: stmt) -> Generator[AST, None, None]:
+        # A class-attribute annotation (e.g. `data: Measurement`) is only a hard ordering
+        # constraint when annotations are evaluated at definition time. When they are deferred
+        # (`from __future__ import annotations` or Python >= 3.14) the name is a lazy forward
+        # reference -- common between mutually-referencing pydantic models -- so skip the
+        # annotation but still search the assigned value for genuine references.
+        if isinstance(statement, AnnAssign) and self._context.deferred_annotations:
+            if statement.value is not None:
+                yield statement.value
+            return
+        yield statement
 
     @property
     def names(self):
