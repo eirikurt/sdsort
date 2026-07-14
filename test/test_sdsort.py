@@ -35,7 +35,7 @@ TEST_CASES_DIR = Path("test", "cases")
         "jpe",
         "multiline_string",
         "circular_class",
-        "flask_cli",
+        "statement_references_later_definition",
         "flask_tag",
         "partial_function",
         "class_attribute_name_collision",

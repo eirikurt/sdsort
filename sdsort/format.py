@@ -1,6 +1,6 @@
-from ast import AsyncFunctionDef, FunctionDef, Module, parse
+from ast import AsyncFunctionDef, ClassDef, FunctionDef, Module, parse, stmt
 
-from .utils.ast import find_first_line, get_class_nodes, get_function_and_class_nodes, get_method_nodes, is_blank
+from .utils.ast import find_first_line, get_class_nodes, get_method_nodes, is_blank
 
 
 def normalize_blank_lines(lines: list[str]) -> str:
@@ -27,13 +27,18 @@ def _find_where_blanks_should_be(ast: Module, lines: list[str]):
 def _find_required_top_level_blanks(ast: Module, lines: list[str]):
     required_blanks: dict[int, int] = {}
     seen_functions = set[str]()
-    for node in get_function_and_class_nodes(ast):
-        if isinstance(node, (FunctionDef, AsyncFunctionDef)):
-            if node.name in seen_functions:
-                continue
-            seen_functions.add(node.name)
-        line_index = find_first_line(node, lines)
-        required_blanks[line_index] = 2
+    previous_node: stmt | None = None
+    for node in ast.body:
+        if isinstance(node, (FunctionDef, AsyncFunctionDef, ClassDef)):
+            is_overload_repeat = isinstance(node, (FunctionDef, AsyncFunctionDef)) and node.name in seen_functions
+            if isinstance(node, (FunctionDef, AsyncFunctionDef)):
+                seen_functions.add(node.name)
+            if not is_overload_repeat:
+                required_blanks[find_first_line(node, lines)] = 2
+        elif isinstance(previous_node, (FunctionDef, AsyncFunctionDef, ClassDef)):
+            # PEP 8 requires 2 blank lines after a top-level def/class, i.e. before a following statement.
+            required_blanks[find_first_line(node, lines)] = 2
+        previous_node = node
     return required_blanks
 
 

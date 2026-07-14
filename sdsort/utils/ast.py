@@ -83,9 +83,5 @@ def is_comment(line: str):
     return line.strip().startswith("#")
 
 
-def get_function_and_class_nodes(ast: Module):
-    return [node for node in ast.body if isinstance(node, (FunctionDef, AsyncFunctionDef, ClassDef))]
-
-
 def get_class_nodes(ast: Module):
     return [node for node in ast.body if isinstance(node, ClassDef)]

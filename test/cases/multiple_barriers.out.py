@@ -1,6 +1,7 @@
 def a():
     print("a")
 
+
 if True:
     x = a()
 
