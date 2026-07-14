@@ -1,3 +1,4 @@
+import ast
 import shutil
 from os import mkdir
 from pathlib import Path
@@ -6,6 +7,7 @@ import pytest
 from click.testing import CliRunner
 
 from sdsort import main, step_down_sort
+from sdsort.context import _targets_python314_or_newer
 from sdsort.utils.file import read_file
 
 TEST_CASES_DIR = Path("test", "cases")
@@ -31,7 +33,17 @@ TEST_CASES_DIR = Path("test", "cases")
         "sandwiched_decorator",
         "parametrized_test",
         "overloads",
+        "type_hints",
+        "jpe",
         "multiline_string",
+        "circular_class",
+        "statement_references_later_definition",
+        "flask_tag",
+        "partial_function",
+        "class_attribute_name_collision",
+        "class_attribute_references_outer_function",
+        "dangling_comment_between_defs",
+        "deferred_class_attribute_annotations",
     ],
 )
 def test_all_cases(test_case: str):
@@ -126,3 +138,38 @@ def test_check_flag_exits_cleanly_when_files_are_already_sorted(tmp_path: Path):
     # Assert
     assert result.exit_code == 0, "Exit code should be 0 when files are already sorted"
     assert "would be re-arranged" not in result.output
+
+
+@pytest.mark.parametrize(
+    "requires_python,expected",
+    [
+        (">=3.11", False),
+        (">=3.13", False),
+        (">=3.14", True),
+        (">=3.14.0", True),
+        (">=3.14a1", True),  # PEP 440 pre-release specifier must not crash int()
+        (">=3.15b2", True),
+    ],
+)
+def test_targets_python314_handles_prerelease_specifiers(tmp_path: Path, requires_python: str, expected: bool):
+    (tmp_path / "pyproject.toml").write_text(
+        f'[project]\nrequires-python = "{requires_python}"\n', encoding="utf-8"
+    )
+    assert _targets_python314_or_newer(tmp_path) is expected
+
+
+def test_form_feed_between_functions_does_not_crash(tmp_path: Path):
+    # A form feed (\x0c) is in-line whitespace to Python's tokenizer, but str.splitlines()
+    # treats it as a line break. Splitting on it misaligns line ranges from AST line numbers.
+    source = "def helper():\n    return 1\n\n\x0c\n\ndef main():\n    return helper()\n"
+    target_path = tmp_path / "form_feed.py"
+    target_path.write_text(source, encoding="utf-8")
+
+    # Act
+    output = step_down_sort(target_path)
+
+    # Assert
+    assert output is not None, "The caller (main) should be pulled ahead of the callee (helper)"
+    tree = ast.parse(output)
+    assert {n.name for n in tree.body if isinstance(n, ast.FunctionDef)} == {"helper", "main"}
+    assert output.index("def main") < output.index("def helper"), "main should come before helper"

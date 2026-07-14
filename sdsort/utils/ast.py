@@ -1,4 +1,4 @@
-from ast import AST, AsyncFunctionDef, ClassDef, FunctionDef, Module, walk
+from ast import AST, AsyncFunctionDef, ClassDef, FunctionDef, Module, stmt, walk
 from itertools import takewhile
 from typing import Protocol, TypeGuard, Union
 
@@ -15,14 +15,20 @@ def find_start_of_class_body(cls: ClassDef, source_lines: list[str]):
     return cls.lineno
 
 
+def get_method_nodes(classNode: ClassDef):
+    return (node for node in classNode.body if isinstance(node, (FunctionDef, AsyncFunctionDef)))
+
+
 def determine_line_range(class_or_function: ClassOrFunction, source_lines: list[str]) -> tuple[int, int]:
     start = find_first_line(class_or_function, source_lines)
     stop = find_last_line(class_or_function, source_lines)
     return start, stop
 
 
-def find_first_line(class_or_function: ClassOrFunction, source_lines: list[str]) -> int:
-    start = min((d.lineno for d in class_or_function.decorator_list), default=class_or_function.lineno)
+def find_first_line(node: stmt, source_lines: list[str]) -> int:
+    start = node.lineno
+    if isinstance(node, (ClassDef, FunctionDef, AsyncFunctionDef)):
+        start = min((d.lineno for d in node.decorator_list), default=start)
 
     # AST line numbers are 1-based. Subtract one from the start position to make it 0-based
     start -= 1
@@ -54,20 +60,8 @@ def find_last_line(function: ClassOrFunction, source_lines: list[str]) -> int:
     return stop
 
 
-class HasLineNo(Protocol):
-    lineno: int
-
-
-def has_lineno(node: AST) -> TypeGuard[HasLineNo]:
-    return hasattr(node, "lineno")
-
-
 def is_blank(line: str):
     return len(line) == 0 or line.isspace()
-
-
-def is_comment(line: str):
-    return line.strip().startswith("#")
 
 
 def count_leading_whitespace_chars(line: str):
@@ -77,13 +71,17 @@ def count_leading_whitespace_chars(line: str):
     return count
 
 
-def get_function_and_class_nodes(ast: Module):
-    return [node for node in ast.body if isinstance(node, (FunctionDef, AsyncFunctionDef, ClassDef))]
+class HasLineNo(Protocol):
+    lineno: int
+
+
+def has_lineno(node: AST) -> TypeGuard[HasLineNo]:
+    return hasattr(node, "lineno")
+
+
+def is_comment(line: str):
+    return line.strip().startswith("#")
 
 
 def get_class_nodes(ast: Module):
     return [node for node in ast.body if isinstance(node, ClassDef)]
-
-
-def get_method_nodes(classNode: ClassDef):
-    return (node for node in classNode.body if isinstance(node, (FunctionDef, AsyncFunctionDef)))
