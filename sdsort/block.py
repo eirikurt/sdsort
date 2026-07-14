@@ -38,21 +38,6 @@ def block_for(node: stmt, source_lines: list[str], context: Context):
     return StatementBlock(node, source_lines, context)
 
 
-def resolve_overlapping_ranges(blocks: "Collection[Block]") -> None:
-    """Clamp block starts so consecutive line ranges never overlap.
-
-    `find_first_line` (which absorbs leading comments) and `find_last_line` (which
-    absorbs trailing indented content) can both claim the same boundary line — e.g. an
-    indented comment sitting between two adjacent defs with no blank line separating
-    them. Overlapping ranges would make `_rearrange_lines` emit that line twice. Give any
-    disputed line to the earlier block by advancing the later block's start.
-    """
-    running_end = 0
-    for block in blocks:
-        block.start = max(block.start, running_end)
-        running_end = max(running_end, block.end)
-
-
 class Block(ABC):
     def __init__(self, node: AST, context: Context):
         self._nodes = [node]
@@ -216,6 +201,21 @@ class ClassBlock(Block):
     @property
     def method_blocks(self) -> Collection[Block]:
         return self._methods
+
+
+def resolve_overlapping_ranges(blocks: "Collection[Block]") -> None:
+    """Clamp block starts so consecutive line ranges never overlap.
+
+    `find_first_line` (which absorbs leading comments) and `find_last_line` (which
+    absorbs trailing indented content) can both claim the same boundary line — e.g. an
+    indented comment sitting between two adjacent defs with no blank line separating
+    them. Overlapping ranges would make `_rearrange_lines` emit that line twice. Give any
+    disputed line to the earlier block by advancing the later block's start.
+    """
+    running_end = 0
+    for block in blocks:
+        block.start = max(block.start, running_end)
+        running_end = max(running_end, block.end)
 
 
 class FunctionBlock(Block):
