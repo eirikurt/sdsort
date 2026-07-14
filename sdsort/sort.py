@@ -59,7 +59,7 @@ def _sort_top_level_blocks(source_lines: list[str], syntax_tree: Module, context
     deps = _find_dependencies(blocks, _function_call_target)
     sorted_blocks: list[Block] = []
     for block in blocks:
-        _depth_first_sort(block, blocks, deps, sorted_blocks, [])
+        _depth_first_sort(block, deps, sorted_blocks, [])
     return _rearrange_lines(source_lines, blocks, sorted_blocks)
 
 
@@ -87,7 +87,7 @@ def _sort_methods_within_class(source_lines: list[str], class_def: ClassDef, con
     # Re-order methods as needed
     sorted_blocks: list[Block] = []
     for block in blocks:
-        _depth_first_sort(block, blocks, dependencies, sorted_blocks, [])
+        _depth_first_sort(block, dependencies, sorted_blocks, [])
 
     # Copy lines from the original source, shifting the methods around as needed
     return _rearrange_lines(
@@ -125,7 +125,6 @@ def _find_dependencies(
 
 def _depth_first_sort(
     current_block: Block,
-    blocks: Collection[Block],
     dependencies: AcyclicGraph,
     sorted_blocks: list[Block],
     path: list[Block],
@@ -141,7 +140,7 @@ def _depth_first_sort(
 
     for dependency in dependencies.get_successors(current_block):
         if dependency not in path:
-            _depth_first_sort(dependency, blocks, dependencies, sorted_blocks, path)
+            _depth_first_sort(dependency, dependencies, sorted_blocks, path)
 
     path.pop()
 
