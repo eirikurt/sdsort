@@ -5,7 +5,7 @@ from itertools import takewhile
 from pathlib import Path
 from typing import Callable, Optional, Union
 
-from .block import Block, ClassBlock, FunctionBlock, block_for
+from .block import Block, ClassBlock, FunctionBlock, block_for, resolve_overlapping_ranges
 from .context import Context, gather_context
 from .format import normalize_blank_lines
 from .graph import AcyclicGraph
@@ -71,6 +71,7 @@ def _find_top_level_blocks(syntax_tree: Module, source_lines: list[str], context
             current_block = block_for(node, source_lines, context)
             blocks.append(current_block)
 
+    resolve_overlapping_ranges(blocks)
     return blocks
 
 

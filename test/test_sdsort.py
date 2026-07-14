@@ -41,6 +41,7 @@ TEST_CASES_DIR = Path("test", "cases")
         "partial_function",
         "class_attribute_name_collision",
         "class_attribute_references_outer_function",
+        "dangling_comment_between_defs",
     ],
 )
 def test_all_cases(test_case: str):
