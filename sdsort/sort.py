@@ -14,14 +14,14 @@ from .utils.ast import (
     get_class_nodes,
     is_blank,
 )
-from .utils.file import read_file
+from .utils.file import read_file, split_lines
 
 
 def step_down_sort(python_file_path: str | Path) -> Optional[str]:
     source = read_file(python_file_path)
     syntax_tree = parse(source, filename=python_file_path)
     context = gather_context(syntax_tree, Path(python_file_path).resolve())
-    source_lines = source.splitlines()
+    source_lines = split_lines(source)
 
     # First, sort top-level blocks (functions and classes)
     modified_lines = _sort_top_level_blocks(source_lines, syntax_tree, context)

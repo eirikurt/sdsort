@@ -1,3 +1,4 @@
+import ast
 import shutil
 from os import mkdir
 from pathlib import Path
@@ -134,3 +135,20 @@ def test_check_flag_exits_cleanly_when_files_are_already_sorted(tmp_path: Path):
     # Assert
     assert result.exit_code == 0, "Exit code should be 0 when files are already sorted"
     assert "would be re-arranged" not in result.output
+
+
+def test_form_feed_between_functions_does_not_crash(tmp_path: Path):
+    # A form feed (\x0c) is in-line whitespace to Python's tokenizer, but str.splitlines()
+    # treats it as a line break. Splitting on it misaligns line ranges from AST line numbers.
+    source = "def helper():\n    return 1\n\n\x0c\n\ndef main():\n    return helper()\n"
+    target_path = tmp_path / "form_feed.py"
+    target_path.write_text(source, encoding="utf-8")
+
+    # Act
+    output = step_down_sort(target_path)
+
+    # Assert
+    assert output is not None, "The caller (main) should be pulled ahead of the callee (helper)"
+    tree = ast.parse(output)
+    assert {n.name for n in tree.body if isinstance(n, ast.FunctionDef)} == {"helper", "main"}
+    assert output.index("def main") < output.index("def helper"), "main should come before helper"
