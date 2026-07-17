@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: test
+.PHONY: ruff pyright test testx case rpt
 
 ruff:
 	uv run ruff check --fix
