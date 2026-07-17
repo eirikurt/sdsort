@@ -68,7 +68,7 @@ def test_type_alias_is_not_reordered_below_class_it_references():
     input_file_path = TEST_CASES_DIR / "type_declaration.in.py"
     expected_output = read_file(TEST_CASES_DIR / "type_declaration.out.py")
 
-    actual_output = step_down_sort(input_file_path)
+    _, actual_output = step_down_sort(input_file_path)
 
     if actual_output is None:
         actual_output = read_file(input_file_path)
