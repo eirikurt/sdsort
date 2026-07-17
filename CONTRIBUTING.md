@@ -114,6 +114,10 @@ CI runs the test suite across Python 3.11–3.14 on Linux, plus a Windows run,
 and enforces the same lint and type checks as `make rpt`. If `make rpt` passes
 locally, CI should be green too.
 
+## Introducing new dependencies
+
+Given the recent surge in vulnerability reports and supply-chain attacks on open-source packages, we'd like to keep the number of dependencies as low as possible. In light of that, a compelling case must be made for introducing a new dependency.
+
 ## Reporting bugs
 
 Open an issue at https://github.com/eirikurt/sdsort/issues. The most helpful
