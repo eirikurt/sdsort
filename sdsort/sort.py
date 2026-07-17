@@ -1,9 +1,11 @@
 from ast import Attribute, Call, ClassDef, Module, Name, parse
 from collections import defaultdict
 from collections.abc import Collection
+from io import BytesIO
 from itertools import takewhile
 from pathlib import Path
-from typing import Callable, Optional, Union
+from tokenize import COMMENT, tokenize
+from typing import Callable, Literal, Optional, Union
 
 from .block import Block, ClassBlock, FunctionBlock, block_for, resolve_overlapping_ranges
 from .context import Context, gather_context
@@ -16,9 +18,16 @@ from .utils.ast import (
 )
 from .utils.file import read_file, split_lines
 
+ResultType = Union[
+    tuple[Literal["sorted"], str], tuple[Literal["skipped"], None], tuple[Literal["unchanged"], None]
+]
 
-def step_down_sort(python_file_path: str | Path) -> Optional[str]:
+
+def step_down_sort(python_file_path: str | Path) -> ResultType:
     source = read_file(python_file_path)
+    if _should_skip(source):
+        return ("skipped", None)
+
     syntax_tree = parse(source, filename=python_file_path)
     context = gather_context(syntax_tree, Path(python_file_path).resolve())
     source_lines = split_lines(source)
@@ -44,9 +53,19 @@ def step_down_sort(python_file_path: str | Path) -> Optional[str]:
     final_lines.extend(modified_lines[len(final_lines) :])
 
     if source_lines != final_lines:
-        return normalize_blank_lines(final_lines)
+        return ("sorted", normalize_blank_lines(final_lines))
     else:
-        return None
+        return ("unchanged", None)
+
+
+def _should_skip(source: str) -> bool:
+    code_bytes = BytesIO(source.encode("utf-8"))
+    for token in tokenize(code_bytes.readline):
+        if token.type == COMMENT:
+            key, _, value = token.string.lstrip("#").partition(":")
+            if key.strip() == "sdsort" and value.strip() == "skip_file":
+                return True
+    return False
 
 
 def _sort_top_level_blocks(source_lines: list[str], syntax_tree: Module, context: Context) -> list[str]:

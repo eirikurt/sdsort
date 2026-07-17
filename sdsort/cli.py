@@ -46,14 +46,17 @@ def _sort_files(file_paths: list[str], check: bool):
     results = Results()
 
     for file_path in file_paths:
-        modified_source = step_down_sort(file_path)
-        if modified_source is not None:
-            if not check:
-                with open(file_path, "w", encoding="utf-8") as file:
-                    file.write(modified_source)
-            results.modified_files.append(file_path)
-        else:
-            results.pristine_files.append(file_path)
+        modification = step_down_sort(file_path)
+        match modification:
+            case ("sorted", modified_source):
+                if not check:
+                    with open(file_path, "w", encoding="utf-8") as file:
+                        file.write(modified_source)
+                results.modified_files.append(file_path)
+            case ("skipped", _):
+                results.skipped_files.append(file_path)
+            case ("unchanged", _):
+                results.pristine_files.append(file_path)
 
     return results
 
@@ -61,10 +64,11 @@ def _sort_files(file_paths: list[str], check: bool):
 @dataclass
 class Results:
     modified_files: list[str] = field(default_factory=list)
+    skipped_files: list[str] = field(default_factory=list)
     pristine_files: list[str] = field(default_factory=list)
 
     def __len__(self):
-        return len(self.modified_files) + len(self.pristine_files)
+        return len(self.modified_files) + len(self.pristine_files) + len(self.skipped_files)
 
 
 def _print_results(results: Results, check: bool, duration: float):
@@ -75,9 +79,14 @@ def _print_results(results: Results, check: bool, duration: float):
             click.secho("Re-arranged the following files:", fg="yellow", bold=True)
         for modified_file in results.modified_files:
             click.echo(f"- {modified_file}")
+    if len(results.skipped_files) > 0:
+        click.secho(
+            f"{pluralize(len(results.skipped_files), 'file')} skipped",
+            fg="yellow",
+        )
     if len(results.pristine_files) > 0:
         click.secho(
-            f"{pluralize(len(results.pristine_files), 'file')} left unchanged",
+            f"{pluralize(len(results.pristine_files), 'file')} already sorted",
             fg="green",
         )
 

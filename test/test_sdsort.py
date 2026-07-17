@@ -46,6 +46,7 @@ TEST_CASES_DIR = Path("test", "cases")
         "dangling_comment_between_defs",
         "deferred_class_attribute_annotations",
         "deferred_statement_annotation",
+        "skip_file_directive",
     ],
 )
 def test_all_cases(test_case: str):
@@ -55,7 +56,7 @@ def test_all_cases(test_case: str):
     expected_output = read_file(expected_output_file_path)
 
     # Act
-    actual_output = step_down_sort(input_file_path)
+    _, actual_output = step_down_sort(input_file_path)
 
     if actual_output is None:
         actual_output = read_file(input_file_path)
@@ -67,7 +68,7 @@ def test_type_alias_is_not_reordered_below_class_it_references():
     input_file_path = TEST_CASES_DIR / "type_declaration.in.py"
     expected_output = read_file(TEST_CASES_DIR / "type_declaration.out.py")
 
-    actual_output = step_down_sort(input_file_path)
+    _, actual_output = step_down_sort(input_file_path)
 
     if actual_output is None:
         actual_output = read_file(input_file_path)
@@ -180,10 +181,11 @@ def test_form_feed_between_functions_does_not_crash(tmp_path: Path):
     target_path.write_text(source, encoding="utf-8")
 
     # Act
-    output = step_down_sort(target_path)
+    status, output = step_down_sort(target_path)
 
     # Assert
-    assert output is not None, "The caller (main) should be pulled ahead of the callee (helper)"
+    assert status == "sorted"
+    assert output is not None
     tree = ast.parse(output)
     assert {n.name for n in tree.body if isinstance(n, ast.FunctionDef)} == {"helper", "main"}
     assert output.index("def main") < output.index("def helper"), "main should come before helper"

@@ -33,6 +33,12 @@ sdsort --check <file_or_directory>
 
 This will exit with code 1 if any files would be re-arranged, making it suitable for CI pipelines and pre-commit hooks.
 
+## Configuration
+
+### Skipping a file
+
+To prevent sdsort from modifying a particular file, add a `# sdsort: skip_file` comment somewhere within the file.
+
 ## pre-commit
 
 `sdsort` can be used as a [pre-commit](https://pre-commit.com/) hook. Add the following to your `.pre-commit-config.yaml`:
@@ -40,7 +46,7 @@ This will exit with code 1 if any files would be re-arranged, making it suitable
 ```yaml
 repos:
   - repo: https://github.com/eirikurt/sdsort
-    rev: v1.0.0
+    rev: v1.1.0
     hooks:
       - id: sdsort
 ```
