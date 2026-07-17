@@ -5,7 +5,7 @@ from io import BytesIO
 from itertools import takewhile
 from pathlib import Path
 from tokenize import COMMENT, tokenize
-from typing import Callable, Literal, Optional, Tuple, Union
+from typing import Callable, Literal, Optional, Union
 
 from .block import Block, ClassBlock, FunctionBlock, block_for, resolve_overlapping_ranges
 from .context import Context, gather_context
@@ -19,7 +19,7 @@ from .utils.ast import (
 from .utils.file import read_file, split_lines
 
 ResultType = Union[
-    Tuple[Literal["sorted"], str], Tuple[Literal["skipped"], None], Tuple[Literal["unchanged"], None]
+    tuple[Literal["sorted"], str], tuple[Literal["skipped"], None], tuple[Literal["unchanged"], None]
 ]
 
 
@@ -58,7 +58,7 @@ def step_down_sort(python_file_path: str | Path) -> ResultType:
         return ("unchanged", None)
 
 
-def _should_skip(source: str):
+def _should_skip(source: str) -> bool:
     code_bytes = BytesIO(source.encode("utf-8"))
     for token in tokenize(code_bytes.readline):
         if token.type == COMMENT:
