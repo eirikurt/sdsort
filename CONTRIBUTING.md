@@ -116,7 +116,10 @@ locally, CI should be green too.
 
 ## Introducing new dependencies
 
-Given the recent surge in vulnerability reports and supply-chain attacks on open-source packages, we'd like to keep the number of dependencies as low as possible. In light of that, a compelling case must be made for introducing a new dependency.
+Given the recent surge in vulnerability reports and supply-chain attacks on
+open-source packages, we'd like to keep the number of dependencies as low as
+possible. In light of that, a compelling case must be made for introducing a
+new dependency.
 
 ## Reporting bugs
 
