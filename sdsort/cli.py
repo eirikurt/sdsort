@@ -81,12 +81,12 @@ def _print_results(results: Results, check: bool, duration: float):
             click.echo(f"- {modified_file}")
     if len(results.skipped_files) > 0:
         click.secho(
-            f"{pluralize(len(results.skipped_files), 'file')} were skipped",
+            f"{pluralize(len(results.skipped_files), 'file')} skipped",
             fg="yellow",
         )
     if len(results.pristine_files) > 0:
         click.secho(
-            f"{pluralize(len(results.pristine_files), 'file')} were already sorted",
+            f"{pluralize(len(results.pristine_files), 'file')} already sorted",
             fg="green",
         )
 
