@@ -14,8 +14,8 @@ make test         # Run pytest suite
 make ruff         # Format and sort imports
 make pyright      # Type check
 
-# Run a single parametrized test case
-uv run pytest "test/test_sdsort.py::test_all_cases[single_class]" -v
+# Run a single test case (matches by name via pytest -k)
+make case single_class
 ```
 
 ## Architecture
