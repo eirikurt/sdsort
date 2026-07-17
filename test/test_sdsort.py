@@ -56,7 +56,7 @@ def test_all_cases(test_case: str):
     expected_output = read_file(expected_output_file_path)
 
     # Act
-    actual_output = step_down_sort(input_file_path)
+    _, actual_output = step_down_sort(input_file_path)
 
     if actual_output is None:
         actual_output = read_file(input_file_path)
@@ -181,10 +181,11 @@ def test_form_feed_between_functions_does_not_crash(tmp_path: Path):
     target_path.write_text(source, encoding="utf-8")
 
     # Act
-    output = step_down_sort(target_path)
+    status, output = step_down_sort(target_path)
 
     # Assert
-    assert output is not None, "The caller (main) should be pulled ahead of the callee (helper)"
+    assert status == "sorted"
+    assert output is not None
     tree = ast.parse(output)
     assert {n.name for n in tree.body if isinstance(n, ast.FunctionDef)} == {"helper", "main"}
     assert output.index("def main") < output.index("def helper"), "main should come before helper"

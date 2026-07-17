@@ -144,7 +144,7 @@ def check_file(py_file: Path) -> tuple[bool, list[Failure]]:
         return False, []
 
     try:
-        sorted_source = step_down_sort(py_file)
+        _, sorted_source = step_down_sort(py_file)
     except Exception as exc:
         return False, [Failure(py_file, "raised exception", str(exc))]
 
