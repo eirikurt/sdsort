@@ -33,6 +33,20 @@ sdsort --check <file_or_directory>
 
 This will exit with code 1 if any files would be re-arranged, making it suitable for CI pipelines and pre-commit hooks.
 
+### Parallelism
+
+Larger runs are sorted across parallel worker processes. Use `--jobs`/`-j` to control how many:
+
+```bash
+sdsort --jobs 4 <directory_path>
+```
+
+0 (the default) picks one worker per available CPU; 1 disables parallelism and sorts every file in the current process. Runs of fewer than 50 files always stay serial regardless of this setting, since spawning workers costs more than it saves at that scale.
+
+### Files that cannot be parsed
+
+If sdsort cannot parse a file, it reports the file on stderr and moves on. The rest of the files are still sorted, and the exit code is unaffected.
+
 ## Configuration
 
 ### Skipping a file

@@ -5,3 +5,8 @@ __pycache__/
 .vscode/
 dist/
 test/repos/
+
+# Scratch and working notes from Claude Code's superpowers skills: .superpowers/ holds
+# per-plan subagent artifacts, docs/superpowers/ holds design specs and implementation plans.
+.superpowers/
+docs/superpowers/

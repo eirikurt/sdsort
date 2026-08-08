@@ -1,4 +1,5 @@
 import ast
+import os
 import shutil
 import sys
 from os import mkdir
@@ -7,11 +8,47 @@ from pathlib import Path
 import pytest
 from click.testing import CliRunner
 
-from sdsort import main, step_down_sort
+from sdsort import cli, main, step_down_sort
+from sdsort.cli import _MAX_WORKERS, _MIN_FILES_FOR_PARALLELISM, _worker_count
 from sdsort.context import _targets_python314_or_newer
 from sdsort.utils.file import read_file
 
 TEST_CASES_DIR = Path("test", "cases")
+UNPARSEABLE_SOURCE = "def f(:\n"
+
+
+def write_unparseable(path: Path) -> Path:
+    path.write_text(UNPARSEABLE_SOURCE, encoding="utf-8")
+    return path
+
+
+@pytest.fixture
+def runner() -> CliRunner:
+    return CliRunner()
+
+
+@pytest.fixture
+def unsorted_file(tmp_path: Path) -> Path:
+    """A file sdsort will re-arrange. Compare it against the `sorted_output` fixture."""
+    return Path(shutil.copy(TEST_CASES_DIR / "comments.in.py", tmp_path))
+
+
+@pytest.fixture
+def already_sorted_file(tmp_path: Path) -> Path:
+    """A file already in step-down order, so a run over it reports no changes."""
+    return Path(shutil.copy(TEST_CASES_DIR / "comments.out.py", tmp_path))
+
+
+@pytest.fixture
+def unparseable_file(tmp_path: Path) -> Path:
+    """A file sdsort cannot parse. Named broken.py, which some assertions match on."""
+    return write_unparseable(tmp_path / "broken.py")
+
+
+@pytest.fixture
+def sorted_output() -> str:
+    """What the `unsorted_file` fixture's contents look like once sorted."""
+    return read_file(TEST_CASES_DIR / "comments.out.py")
 
 
 @pytest.mark.parametrize(
@@ -75,32 +112,24 @@ def test_type_alias_is_not_reordered_below_class_it_references():
     assert actual_output == expected_output
 
 
-def test_when_single_file_is_targeted_then_other_files_are_not_modified(tmp_path: Path):
+def test_when_single_file_is_targeted_then_other_files_are_not_modified(
+    tmp_path: Path, runner: CliRunner, unsorted_file: Path, sorted_output: str
+):
     # Arrange
-    file_to_sort = TEST_CASES_DIR / "comments.in.py"
     other_file = TEST_CASES_DIR / "dataclass.in.py"
-    runner = CliRunner()
-
-    # Copy a couple of files
-    target_path = shutil.copy(file_to_sort, tmp_path)
     other_path = shutil.copy(other_file, tmp_path)
 
     # Act
-    runner.invoke(main, [str(target_path)])
-
-    # read both back
-    target_after = read_file(target_path)
-    other_after = read_file(other_path)
+    runner.invoke(main, [str(unsorted_file)])
 
     # Assert
-    assert target_after == read_file(TEST_CASES_DIR / "comments.out.py"), "Target file should be sorted"
-    assert other_after == read_file(other_file), "Other file should be unchanged"
+    assert read_file(unsorted_file) == sorted_output, "Target file should be sorted"
+    assert read_file(other_path) == read_file(other_file), "Other file should be unchanged"
 
 
-def test_when_directory_is_provided_then_all_python_files_in_it_are_sorted(tmp_path: Path):
+def test_when_directory_is_provided_then_all_python_files_in_it_are_sorted(tmp_path: Path, runner: CliRunner):
     # Arrange
     test_cases = ["comments", "dataclass"]
-    runner = CliRunner()
 
     # Copy a couple of files
     for tc in test_cases:
@@ -123,32 +152,22 @@ def test_when_directory_is_provided_then_all_python_files_in_it_are_sorted(tmp_p
     # TODO: assert that other files in directory were not modified?
 
 
-def test_check_flag_reports_unsorted_files_without_modifying_them(tmp_path: Path):
+def test_check_flag_reports_unsorted_files_without_modifying_them(runner: CliRunner, unsorted_file: Path):
     # Arrange
-    file_to_sort = TEST_CASES_DIR / "comments.in.py"
-    runner = CliRunner()
-
-    target_path = shutil.copy(file_to_sort, tmp_path)
-    original_content = read_file(target_path)
+    original_content = read_file(unsorted_file)
 
     # Act
-    result = runner.invoke(main, ["--check", str(target_path)])
+    result = runner.invoke(main, ["--check", str(unsorted_file)])
 
     # Assert
     assert result.exit_code == 1, "Exit code should be 1 when files need sorting"
     assert "would be re-arranged" in result.output
-    assert read_file(target_path) == original_content, "File should not be modified"
+    assert read_file(unsorted_file) == original_content, "File should not be modified"
 
 
-def test_check_flag_exits_cleanly_when_files_are_already_sorted(tmp_path: Path):
-    # Arrange
-    already_sorted_file = TEST_CASES_DIR / "comments.out.py"
-    runner = CliRunner()
-
-    target_path = shutil.copy(already_sorted_file, tmp_path)
-
+def test_check_flag_exits_cleanly_when_files_are_already_sorted(runner: CliRunner, already_sorted_file: Path):
     # Act
-    result = runner.invoke(main, ["--check", str(target_path)])
+    result = runner.invoke(main, ["--check", str(already_sorted_file)])
 
     # Assert
     assert result.exit_code == 0, "Exit code should be 0 when files are already sorted"
@@ -173,6 +192,106 @@ def test_targets_python314_handles_prerelease_specifiers(tmp_path: Path, require
     assert _targets_python314_or_newer(tmp_path) is expected
 
 
+@pytest.mark.parametrize(
+    "file_count,jobs,cpu_count,expected",
+    [
+        (1000, 0, 4, 4),  # auto: one worker per available CPU
+        (1000, 1, 4, 1),  # explicit -j 1 disables parallelism
+        (1000, 3, 4, 3),  # explicit job count is honoured
+        (_MIN_FILES_FOR_PARALLELISM - 1, 0, 4, 1),  # too little work to be worth spawning workers
+        (_MIN_FILES_FOR_PARALLELISM, 0, 4, 4),
+        (2, 8, 4, 2),  # never more workers than files
+        (0, 8, 4, 1),  # no files at all must not ask for zero workers
+        (10_000, 5000, 4, _MAX_WORKERS),  # an oversized explicit -j degrades gracefully
+        (10_000, 0, 200, _MAX_WORKERS),  # the ceiling applies to a detected count too
+    ],
+)
+def test_worker_count(file_count: int, jobs: int, cpu_count: int, expected: int):
+    assert _worker_count(file_count, jobs, cpu_count) == expected
+
+
+def test_parallel_run_matches_serial_run(tmp_path: Path, runner: CliRunner):
+    # Sorting happens in worker processes, so verify that route writes exactly what the
+    # single-process route does.
+    test_cases = ["comments", "dataclass", "single_class", "top_level_functions"]
+    serial_dir = tmp_path / "serial"
+    parallel_dir = tmp_path / "parallel"
+    for directory in (serial_dir, parallel_dir):
+        mkdir(directory)
+        for tc in test_cases:
+            shutil.copy(TEST_CASES_DIR / f"{tc}.in.py", directory)
+
+    serial_result = runner.invoke(main, ["-j", "1", str(serial_dir)])
+    parallel_result = runner.invoke(main, ["-j", "4", str(parallel_dir)])
+
+    assert serial_result.exit_code == 0, serial_result.output
+    assert parallel_result.exit_code == 0, parallel_result.output
+    for tc in test_cases:
+        expected = read_file(TEST_CASES_DIR / f"{tc}.out.py")
+        assert read_file(serial_dir / f"{tc}.in.py") == expected
+        assert read_file(parallel_dir / f"{tc}.in.py") == expected, f"{tc} differs when sorted in parallel"
+
+
+def test_unparseable_file_does_not_abort_the_run(
+    tmp_path: Path, runner: CliRunner, unparseable_file: Path, unsorted_file: Path, sorted_output: str
+):
+    # A file sdsort cannot parse must not stop the files after it from being sorted.
+    result = runner.invoke(main, [str(tmp_path)])
+
+    assert result.exit_code == 0, result.output
+    assert read_file(unsorted_file) == sorted_output
+    assert read_file(unparseable_file) == UNPARSEABLE_SOURCE, "Unparseable file must be left alone"
+
+
+def test_file_that_is_not_valid_utf8_is_skipped(tmp_path: Path, runner: CliRunner):
+    latin1_source = b"# caf\xe9\ndef f():\n    return 1\n"
+    target_path = tmp_path / "latin1.py"
+    target_path.write_bytes(latin1_source)
+
+    result = runner.invoke(main, [str(tmp_path)])
+
+    assert result.exit_code == 0, result.output
+    assert "1 file could not be parsed" in result.stderr, "The file must be reported, not silently passed over"
+    assert target_path.read_bytes() == latin1_source
+
+
+@pytest.mark.usefixtures("unparseable_file", "already_sorted_file")
+def test_check_exits_zero_when_the_only_problem_is_an_unparseable_file(tmp_path: Path, runner: CliRunner):
+    result = runner.invoke(main, ["--check", str(tmp_path)])
+
+    assert result.exit_code == 0, result.output
+    assert "1 file could not be parsed" in result.stderr
+
+
+@pytest.mark.usefixtures("unparseable_file", "unsorted_file")
+def test_check_still_exits_one_when_a_sortable_file_would_be_rearranged(tmp_path: Path, runner: CliRunner):
+    result = runner.invoke(main, ["--check", str(tmp_path)])
+    assert result.exit_code == 1, result.output
+
+
+@pytest.mark.usefixtures("unparseable_file", "already_sorted_file")
+def test_unparseable_files_are_reported_on_stderr(tmp_path: Path, runner: CliRunner):
+    result = runner.invoke(main, [str(tmp_path)])
+
+    assert "Could not parse the following files:" in result.stderr
+    assert "broken.py: invalid syntax (line 1)" in result.stderr
+    assert "1 file could not be parsed" in result.stderr
+    assert "1 file already sorted" in result.stdout, "Unparseable files must not inflate this count"
+    assert "Checked 2 files" in result.stdout, "But they are still counted as checked"
+
+
+def test_parallel_run_reports_the_same_warnings_as_serial(tmp_path: Path, runner: CliRunner):
+    for name in ("broken_one.py", "broken_two.py"):
+        write_unparseable(tmp_path / name)
+
+    serial = runner.invoke(main, ["-j", "1", str(tmp_path)])
+    parallel = runner.invoke(main, ["-j", "4", str(tmp_path)])
+
+    assert serial.stderr == parallel.stderr
+    assert "broken_one.py" in serial.stderr
+    assert "broken_two.py" in serial.stderr
+
+
 def test_form_feed_between_functions_does_not_crash(tmp_path: Path):
     # A form feed (\x0c) is in-line whitespace to Python's tokenizer, but str.splitlines()
     # treats it as a line break. Splitting on it misaligns line ranges from AST line numbers.
@@ -189,3 +308,27 @@ def test_form_feed_between_functions_does_not_crash(tmp_path: Path):
     tree = ast.parse(output)
     assert {n.name for n in tree.body if isinstance(n, ast.FunctionDef)} == {"helper", "main"}
     assert output.index("def main") < output.index("def helper"), "main should come before helper"
+
+
+@pytest.mark.usefixtures("unsorted_file")
+def test_non_tolerated_exception_still_crashes_the_run(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, runner: CliRunner
+):
+    def _raise(_path: str) -> None:
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(cli, "step_down_sort", _raise)
+
+    with pytest.raises(RuntimeError, match="boom"):
+        runner.invoke(main, ["-j", "1", str(tmp_path)], catch_exceptions=False)
+
+
+def test_write_failure_after_a_successful_sort_still_crashes(
+    tmp_path: Path, runner: CliRunner, unsorted_file: Path
+):
+    # Only *read*/*parse* failures are tolerated. If sorting succeeds but
+    # writing the result back fails, that must still crash the run rather than being swallowed.
+    # Make the the file read-only to trigger a write failure
+    os.chmod(unsorted_file, 0o444)
+    with pytest.raises(OSError):
+        runner.invoke(main, ["-j", "1", str(tmp_path)], catch_exceptions=False)
