@@ -328,10 +328,7 @@ def test_write_failure_after_a_successful_sort_still_crashes(
 ):
     # Only *read*/*parse* failures are tolerated. If sorting succeeds but
     # writing the result back fails, that must still crash the run rather than being swallowed.
+    # Make the the file read-only to trigger a write failure
     os.chmod(unsorted_file, 0o444)
-
-    try:
-        with pytest.raises(OSError):
-            runner.invoke(main, ["-j", "1", str(tmp_path)], catch_exceptions=False)
-    finally:
-        os.chmod(unsorted_file, 0o644)
+    with pytest.raises(OSError):
+        runner.invoke(main, ["-j", "1", str(tmp_path)], catch_exceptions=False)
