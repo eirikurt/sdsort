@@ -106,10 +106,15 @@ def _worker_count(file_count: int, jobs: int, cpu_count: int) -> int:
 
 
 def _available_cpu_count() -> int:
-    if sys.version_info >= (3, 13):
-        return os.process_cpu_count() or 1
-    if hasattr(os, "sched_getaffinity"):
-        return len(os.sched_getaffinity(0))  # pyright: ignore[reportAttributeAccessIssue]
+    # The affinity query can be present but still fail, e.g. under a seccomp filter that blocks the
+    # syscall, so fall back to the unconstrained count rather than letting the run die counting CPUs.
+    try:
+        if sys.version_info >= (3, 13):
+            return os.process_cpu_count() or 1
+        if hasattr(os, "sched_getaffinity"):
+            return len(os.sched_getaffinity(0)) or 1  # pyright: ignore[reportAttributeAccessIssue]
+    except OSError:
+        pass
     return os.cpu_count() or 1
 
 
