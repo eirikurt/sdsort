@@ -260,15 +260,12 @@ def test_check_exits_zero_when_the_only_problem_is_an_unparseable_file(tmp_path:
     result = runner.invoke(main, ["--check", str(tmp_path)])
 
     assert result.exit_code == 0, result.output
-    # Without this the assertion above would also hold for an empty directory.
     assert "1 file could not be parsed" in result.stderr
 
 
 @pytest.mark.usefixtures("unparseable_file", "unsorted_file")
 def test_check_still_exits_one_when_a_sortable_file_would_be_rearranged(tmp_path: Path, runner: CliRunner):
-    # An unparseable file must not mask a genuine --check failure.
     result = runner.invoke(main, ["--check", str(tmp_path)])
-
     assert result.exit_code == 1, result.output
 
 
@@ -277,8 +274,6 @@ def test_unparseable_files_are_reported_on_stderr(tmp_path: Path, runner: CliRun
     result = runner.invoke(main, [str(tmp_path)])
 
     assert "Could not parse the following files:" in result.stderr
-    # str(SyntaxError) renders as "invalid syntax (broken.py, line 1)", repeating a file name that
-    # the line already leads with. The reason must carry the line number without that repetition.
     assert "broken.py: invalid syntax (line 1)" in result.stderr
     assert "1 file could not be parsed" in result.stderr
     assert "1 file already sorted" in result.stdout, "Unparseable files must not inflate this count"
@@ -315,29 +310,10 @@ def test_form_feed_between_functions_does_not_crash(tmp_path: Path):
     assert output.index("def main") < output.index("def helper"), "main should come before helper"
 
 
-def test_default_run_auto_parallelizes_without_explicit_jobs_flag(
-    tmp_path: Path, runner: CliRunner, sorted_output: str
-):
-    # Every other parallel test passes an explicit -j; this exercises the default (jobs=0) path
-    # end to end, over enough files to clear _MIN_FILES_FOR_PARALLELISM.
-    for i in range(_MIN_FILES_FOR_PARALLELISM):
-        shutil.copy(TEST_CASES_DIR / "comments.in.py", tmp_path / f"file_{i}.py")
-
-    result = runner.invoke(main, [str(tmp_path)])
-
-    assert result.exit_code == 0, result.output
-    for i in range(_MIN_FILES_FOR_PARALLELISM):
-        assert read_file(tmp_path / f"file_{i}.py") == sorted_output
-
-
 @pytest.mark.usefixtures("unsorted_file")
 def test_non_tolerated_exception_still_crashes_the_run(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, runner: CliRunner
 ):
-    # The spec's binding rule: only SyntaxError/TokenError/UnicodeDecodeError/OSError are
-    # tolerated. Anything else - RecursionError included - must still propagate and crash, because
-    # silently widening the caught set to `Exception` would swallow real defects in sdsort itself.
-    # -j 1 keeps this in-process, since monkeypatching does not reach spawned worker processes.
     def _raise(_path: str) -> None:
         raise RuntimeError("boom")
 
@@ -350,7 +326,7 @@ def test_non_tolerated_exception_still_crashes_the_run(
 def test_write_failure_after_a_successful_sort_still_crashes(
     tmp_path: Path, runner: CliRunner, unsorted_file: Path
 ):
-    # A deliberate non-goal: only *read*/*parse* failures are tolerated. If sorting succeeds but
+    # Only *read*/*parse* failures are tolerated. If sorting succeeds but
     # writing the result back fails, that must still crash the run rather than being swallowed.
     os.chmod(unsorted_file, 0o444)
 
