@@ -3,7 +3,8 @@ from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass, field
 from functools import partial
 from glob import glob
-from typing import Iterable, Iterator
+from tokenize import TokenError
+from typing import Iterable, Iterator, Literal, Union
 
 import click
 
@@ -16,6 +17,15 @@ from .utils.timer import Timer
 # Spawning workers costs a few tens of milliseconds, which only pays for itself once there is a
 # meaningful amount of work to spread across them.
 _MIN_FILES_FOR_PARALLELISM = 50
+
+# Only parse and read failures are tolerated. Anything else is a defect in sdsort itself, and a
+# crash is the right outcome for that: a per-file warning would leave files quietly unsorted.
+_UNREADABLE = (SyntaxError, TokenError, UnicodeDecodeError, OSError)
+
+FileOutcome = Union[
+    tuple[Literal["sorted", "skipped", "unchanged"], None],
+    tuple[Literal["unparseable"], str],
+]
 
 
 @click.command()
@@ -60,17 +70,19 @@ def _sort_files(file_paths: list[str], check: bool, jobs: int):
 
     for file_path, outcome in zip(file_paths, _sort_each(file_paths, check, jobs)):
         match outcome:
-            case "sorted":
+            case ("sorted", _):
                 results.modified_files.append(file_path)
-            case "skipped":
+            case ("skipped", _):
                 results.skipped_files.append(file_path)
-            case "unchanged":
+            case ("unchanged", _):
                 results.pristine_files.append(file_path)
+            case ("unparseable", reason):
+                results.unparseable_files.append((file_path, reason))
 
     return results
 
 
-def _sort_each(file_paths: list[str], check: bool, jobs: int) -> Iterator[str]:
+def _sort_each(file_paths: list[str], check: bool, jobs: int) -> Iterator[FileOutcome]:
     """Sort every file, yielding one outcome per input path, in input order."""
     sort_one = partial(_sort_file, check=check)
     workers = _worker_count(len(file_paths), jobs)
@@ -92,20 +104,40 @@ def _worker_count(file_count: int, jobs: int) -> int:
     return max(1, min(jobs, file_count))
 
 
-def _sort_file(file_path: str, check: bool) -> str:
+def _describe_failure(error: Exception) -> str:
+    """Describe why a file could not be read, for display next to its path.
+
+    str(SyntaxError) appends ast's placeholder filename -- "invalid syntax (<unknown>, line 1)" --
+    which is noise when the real path is already shown alongside the message.
+    """
+    if isinstance(error, SyntaxError):
+        message = error.msg or "invalid syntax"
+        return f"{message} (line {error.lineno})" if error.lineno is not None else message
+    return str(error)
+
+
+def _sort_file(file_path: str, check: bool) -> FileOutcome:
     """Sort a single file, writing it back in place unless this is a --check run.
 
     This runs inside a worker process, so it writes the file itself rather than shipping the whole
-    modified source back to the parent.
+    modified source back to the parent, and it renders the failure reason to a string here so that
+    only picklable data crosses the process boundary.
     """
-    match step_down_sort(file_path):
+    try:
+        modification = step_down_sort(file_path)
+    except _UNREADABLE as error:
+        return ("unparseable", _describe_failure(error))
+
+    match modification:
         case ("sorted", modified_source):
             if not check:
                 with open(file_path, "w", encoding="utf-8") as file:
                     file.write(modified_source)
-            return "sorted"
-        case (outcome, _):
-            return outcome
+            return ("sorted", None)
+        case ("skipped", _):
+            return ("skipped", None)
+        case _:
+            return ("unchanged", None)
 
 
 @dataclass
@@ -113,9 +145,15 @@ class Results:
     modified_files: list[str] = field(default_factory=list)
     skipped_files: list[str] = field(default_factory=list)
     pristine_files: list[str] = field(default_factory=list)
+    unparseable_files: list[tuple[str, str]] = field(default_factory=list)
 
     def __len__(self):
-        return len(self.modified_files) + len(self.pristine_files) + len(self.skipped_files)
+        return (
+            len(self.modified_files)
+            + len(self.pristine_files)
+            + len(self.skipped_files)
+            + len(self.unparseable_files)
+        )
 
 
 def _print_results(results: Results, check: bool, duration: float):

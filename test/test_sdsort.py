@@ -214,6 +214,51 @@ def test_parallel_run_matches_serial_run(tmp_path: Path):
         assert read_file(parallel_dir / f"{tc}.in.py") == expected, f"{tc} differs when sorted in parallel"
 
 
+def test_unparseable_file_does_not_abort_the_run(tmp_path: Path):
+    # A file sdsort cannot parse must not stop the files after it from being sorted.
+    (tmp_path / "broken.py").write_text("def f(:\n", encoding="utf-8")
+    shutil.copy(TEST_CASES_DIR / "comments.in.py", tmp_path)
+    runner = CliRunner()
+
+    result = runner.invoke(main, [str(tmp_path)])
+
+    assert result.exit_code == 0, result.output
+    assert read_file(tmp_path / "comments.in.py") == read_file(TEST_CASES_DIR / "comments.out.py")
+    assert read_file(tmp_path / "broken.py") == "def f(:\n", "Unparseable file must be left alone"
+
+
+def test_file_that_is_not_valid_utf8_is_skipped(tmp_path: Path):
+    target_path = tmp_path / "latin1.py"
+    target_path.write_bytes(b"# caf\xe9\ndef f():\n    return 1\n")
+    runner = CliRunner()
+
+    result = runner.invoke(main, [str(tmp_path)])
+
+    assert result.exit_code == 0, result.output
+    assert target_path.read_bytes() == b"# caf\xe9\ndef f():\n    return 1\n"
+
+
+def test_check_exits_zero_when_the_only_problem_is_an_unparseable_file(tmp_path: Path):
+    (tmp_path / "broken.py").write_text("def f(:\n", encoding="utf-8")
+    shutil.copy(TEST_CASES_DIR / "comments.out.py", tmp_path)
+    runner = CliRunner()
+
+    result = runner.invoke(main, ["--check", str(tmp_path)])
+
+    assert result.exit_code == 0, result.output
+
+
+def test_check_still_exits_one_when_a_sortable_file_would_be_rearranged(tmp_path: Path):
+    # An unparseable file must not mask a genuine --check failure.
+    (tmp_path / "broken.py").write_text("def f(:\n", encoding="utf-8")
+    shutil.copy(TEST_CASES_DIR / "comments.in.py", tmp_path)
+    runner = CliRunner()
+
+    result = runner.invoke(main, ["--check", str(tmp_path)])
+
+    assert result.exit_code == 1, result.output
+
+
 def test_form_feed_between_functions_does_not_crash(tmp_path: Path):
     # A form feed (\x0c) is in-line whitespace to Python's tokenizer, but str.splitlines()
     # treats it as a line break. Splitting on it misaligns line ranges from AST line numbers.
