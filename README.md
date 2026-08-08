@@ -33,6 +33,15 @@ sdsort --check <file_or_directory>
 
 This will exit with code 1 if any files would be re-arranged, making it suitable for CI pipelines and pre-commit hooks.
 
+### Files that cannot be parsed
+
+If sdsort cannot parse a file, it reports the file on stderr and moves on. The rest of the files
+are still sorted, and the exit code is unaffected.
+
+This usually means the file uses newer syntax than the Python interpreter running sdsort, in which
+case the file itself is perfectly valid and only sdsort's view of it is limited. Running sdsort
+under a newer interpreter resolves it.
+
 ## Configuration
 
 ### Skipping a file
