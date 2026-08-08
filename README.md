@@ -47,8 +47,6 @@ sdsort --jobs 4 <directory_path>
 
 If sdsort cannot parse a file, it reports the file on stderr and moves on. The rest of the files are still sorted, and the exit code is unaffected.
 
-This usually means the file uses newer syntax than the Python interpreter running sdsort, in which case the file itself is perfectly valid and only sdsort's view of it is limited. Running sdsort under a newer interpreter resolves it.
-
 ## Configuration
 
 ### Skipping a file
@@ -66,8 +64,6 @@ repos:
     hooks:
       - id: sdsort
 ```
-
-The hook parallelises internally (see [Parallelism](#parallelism)), so it runs with `require_serial: true` to avoid pre-commit's own concurrency multiplying with sdsort's.
 
 ## Maturity
 
