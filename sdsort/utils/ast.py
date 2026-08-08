@@ -1,6 +1,6 @@
-from ast import AST, AsyncFunctionDef, ClassDef, FunctionDef, Module, stmt, walk
+from ast import AsyncFunctionDef, ClassDef, FunctionDef, Module, stmt
 from itertools import takewhile
-from typing import Protocol, TypeGuard, Union
+from typing import Union
 
 Function = Union[FunctionDef, AsyncFunctionDef]
 ClassOrFunction = Union[ClassDef, Function]
@@ -42,7 +42,9 @@ def find_first_line(node: stmt, source_lines: list[str]) -> int:
 
 
 def find_last_line(function: ClassOrFunction, source_lines: list[str]) -> int:
-    stop = max(getattr(n, "end_lineno", n.lineno) for n in walk(function) if has_lineno(n))
+    # A node's own end_lineno already spans every one of its descendants, so there is no need to
+    # walk the subtree looking for the maximum.
+    stop = function.end_lineno or function.lineno
 
     # Probe a bit further until we find a blank line or one with less indentation than the function/class body
     def should_continue(line: str):
@@ -69,14 +71,6 @@ def count_leading_whitespace_chars(line: str):
     for _ in takewhile(lambda x: x == " " or x == "\t", line):
         count += 1
     return count
-
-
-class HasLineNo(Protocol):
-    lineno: int
-
-
-def has_lineno(node: AST) -> TypeGuard[HasLineNo]:
-    return hasattr(node, "lineno")
 
 
 def is_comment(line: str):

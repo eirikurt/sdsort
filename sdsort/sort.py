@@ -35,9 +35,12 @@ def step_down_sort(python_file_path: str | Path) -> ResultType:
     # First, sort top-level blocks (functions and classes)
     modified_lines = _sort_top_level_blocks(source_lines, syntax_tree, context)
 
-    # Re-parse to get updated line numbers for class sorting
-    modified_source = "\n".join(modified_lines) + "\n"
-    modified_tree = parse(modified_source)
+    if modified_lines == source_lines:
+        # Nothing moved, so every line number still holds and the original tree remains valid.
+        modified_tree = syntax_tree
+    else:
+        # Re-parse to get updated line numbers for class sorting
+        modified_tree = parse("\n".join(modified_lines) + "\n")
 
     # Then, sort methods within classes
     final_lines: list[str] = []
@@ -59,6 +62,11 @@ def step_down_sort(python_file_path: str | Path) -> ResultType:
 
 
 def _should_skip(source: str) -> bool:
+    # Tokenizing is by far the most expensive thing we do per file, and the directive can only
+    # match if the tool's name appears verbatim in the source. Rule the file out cheaply first.
+    if "sdsort" not in source:
+        return False
+
     code_bytes = BytesIO(source.encode("utf-8"))
     for token in tokenize(code_bytes.readline):
         if token.type == COMMENT:

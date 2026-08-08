@@ -29,6 +29,13 @@ def _targets_python314_or_newer(directory: Path) -> bool:
     pyproject = _find_pyproject(directory)
     if pyproject is None:
         return False
+    return _requires_python314_or_newer(pyproject)
+
+
+@lru_cache
+def _requires_python314_or_newer(pyproject: Path) -> bool:
+    # Cached on the pyproject.toml rather than the directory: a repository typically has many
+    # source directories resolving to the same handful of project files.
     with pyproject.open("rb") as f:
         data = tomllib.load(f)
     specifier: str = data.get("project", {}).get("requires-python", "")
