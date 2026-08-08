@@ -14,9 +14,6 @@ from sdsort.context import _targets_python314_or_newer
 from sdsort.utils.file import read_file
 
 TEST_CASES_DIR = Path("test", "cases")
-
-# Short enough to be obviously broken, and free of the string "sdsort", so it reaches ast.parse
-# rather than being short-circuited by the skip-directive check.
 UNPARSEABLE_SOURCE = "def f(:\n"
 
 
