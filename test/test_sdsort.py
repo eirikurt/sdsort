@@ -8,8 +8,8 @@ from pathlib import Path
 import pytest
 from click.testing import CliRunner
 
-from sdsort import main, step_down_sort
-from sdsort.cli import _MIN_FILES_FOR_PARALLELISM, _worker_count
+from sdsort import cli, main, step_down_sort
+from sdsort.cli import _MAX_WORKERS, _MIN_FILES_FOR_PARALLELISM, _worker_count
 from sdsort.context import _targets_python314_or_newer
 from sdsort.utils.file import read_file
 
@@ -178,17 +178,28 @@ def test_targets_python314_handles_prerelease_specifiers(tmp_path: Path, require
 @pytest.mark.parametrize(
     "file_count,jobs,expected",
     [
-        (1000, 0, os.cpu_count() or 1),  # auto: one worker per CPU
+        (1000, 0, 4),  # auto: one worker per available CPU
         (1000, 1, 1),  # explicit -j 1 disables parallelism
         (1000, 3, 3),  # explicit job count is honoured
         (_MIN_FILES_FOR_PARALLELISM - 1, 0, 1),  # too little work to be worth spawning workers
-        (_MIN_FILES_FOR_PARALLELISM, 0, os.cpu_count() or 1),
+        (_MIN_FILES_FOR_PARALLELISM, 0, 4),
         (2, 8, 2),  # never more workers than files
         (0, 8, 1),  # no files at all must not ask for zero workers
+        (10_000, 5000, _MAX_WORKERS),  # an oversized explicit -j degrades gracefully instead of erroring
     ],
 )
-def test_worker_count(file_count: int, jobs: int, expected: int):
+def test_worker_count(monkeypatch: pytest.MonkeyPatch, file_count: int, jobs: int, expected: int):
+    # _available_cpu_count() is the single source of truth for the "auto" CPU count; pin it so
+    # this test's expectations don't just restate whatever the host machine happens to report.
+    monkeypatch.setattr(cli, "_available_cpu_count", lambda: 4)
     assert _worker_count(file_count, jobs) == expected
+
+
+def test_worker_count_clamps_the_auto_detected_cpu_count_too(monkeypatch: pytest.MonkeyPatch):
+    # The ceiling applies whether the worker count came from an explicit -j or from CPU detection,
+    # e.g. a very large host or a misreported affinity mask.
+    monkeypatch.setattr(cli, "_available_cpu_count", lambda: 200)
+    assert _worker_count(10_000, 0) == _MAX_WORKERS
 
 
 def test_parallel_run_matches_serial_run(tmp_path: Path):
@@ -304,3 +315,49 @@ def test_form_feed_between_functions_does_not_crash(tmp_path: Path):
     tree = ast.parse(output)
     assert {n.name for n in tree.body if isinstance(n, ast.FunctionDef)} == {"helper", "main"}
     assert output.index("def main") < output.index("def helper"), "main should come before helper"
+
+
+def test_default_run_auto_parallelizes_without_explicit_jobs_flag(tmp_path: Path):
+    # Every other parallel test passes an explicit -j; this exercises the default (jobs=0) path
+    # end to end, over enough files to clear _MIN_FILES_FOR_PARALLELISM.
+    for i in range(_MIN_FILES_FOR_PARALLELISM):
+        shutil.copy(TEST_CASES_DIR / "comments.in.py", tmp_path / f"file_{i}.py")
+    runner = CliRunner()
+
+    result = runner.invoke(main, [str(tmp_path)])
+
+    assert result.exit_code == 0, result.output
+    expected = read_file(TEST_CASES_DIR / "comments.out.py")
+    for i in range(_MIN_FILES_FOR_PARALLELISM):
+        assert read_file(tmp_path / f"file_{i}.py") == expected
+
+
+def test_non_tolerated_exception_still_crashes_the_run(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    # The spec's binding rule: only SyntaxError/TokenError/UnicodeDecodeError/OSError are
+    # tolerated. Anything else - RecursionError included - must still propagate and crash, because
+    # silently widening the caught set to `Exception` would swallow real defects in sdsort itself.
+    # -j 1 keeps this in-process, since monkeypatching does not reach spawned worker processes.
+    shutil.copy(TEST_CASES_DIR / "comments.in.py", tmp_path)
+
+    def _raise(_path: str) -> None:
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(cli, "step_down_sort", _raise)
+    runner = CliRunner()
+
+    with pytest.raises(RuntimeError, match="boom"):
+        runner.invoke(main, ["-j", "1", str(tmp_path)], catch_exceptions=False)
+
+
+def test_write_failure_after_a_successful_sort_still_crashes(tmp_path: Path):
+    # A deliberate non-goal: only *read*/*parse* failures are tolerated. If sorting succeeds but
+    # writing the result back fails, that must still crash the run rather than being swallowed.
+    target_path = shutil.copy(TEST_CASES_DIR / "comments.in.py", tmp_path)
+    os.chmod(target_path, 0o444)
+    runner = CliRunner()
+
+    try:
+        with pytest.raises(OSError):
+            runner.invoke(main, ["-j", "1", str(tmp_path)], catch_exceptions=False)
+    finally:
+        os.chmod(target_path, 0o644)
