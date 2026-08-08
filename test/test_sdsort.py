@@ -254,6 +254,7 @@ def test_file_that_is_not_valid_utf8_is_skipped(tmp_path: Path, runner: CliRunne
     result = runner.invoke(main, [str(tmp_path)])
 
     assert result.exit_code == 0, result.output
+    assert "1 file could not be parsed" in result.stderr, "The file must be reported, not silently passed over"
     assert target_path.read_bytes() == latin1_source
 
 
@@ -262,6 +263,8 @@ def test_check_exits_zero_when_the_only_problem_is_an_unparseable_file(tmp_path:
     result = runner.invoke(main, ["--check", str(tmp_path)])
 
     assert result.exit_code == 0, result.output
+    # Without this the assertion above would also hold for an empty directory.
+    assert "1 file could not be parsed" in result.stderr
 
 
 @pytest.mark.usefixtures("unparseable_file", "unsorted_file")
