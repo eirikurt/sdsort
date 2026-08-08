@@ -131,11 +131,9 @@ was considered. Unparseable files are excluded from the `already sorted` count.
 ```text
 Re-arranged the following files:
 - src/app.py
-
 Could not parse the following files:
 - src/new_syntax.py: expected '(' (line 12)
 - src/latin1.py: 'utf-8' codec can't decode byte 0xe9 in position 4
-
 2 files could not be parsed
 410 files already sorted
 Done! Checked 413 files in 0.31s

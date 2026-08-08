@@ -64,6 +64,9 @@ def step_down_sort(python_file_path: str | Path) -> ResultType:
 def _should_skip(source: str) -> bool:
     # Tokenizing is by far the most expensive thing we do per file, and the directive can only
     # match if the tool's name appears verbatim in the source. Rule the file out cheaply first.
+    # Side effect: cli.py's tolerated-exception tuple only ever sees a TokenError for sources that
+    # contain "sdsort" and then fail to tokenize; an otherwise-identical file without that
+    # substring skips straight to ast.parse() below and would surface as a SyntaxError instead.
     if "sdsort" not in source:
         return False
 

@@ -371,9 +371,13 @@ Then run the whole corpus, which the spec requires to produce 74 warnings and ze
 uv run sdsort --check test/repos; echo "exit=$?"
 ```
 
-Expected: no traceback, `74 files could not be parsed`, `1701 files already sorted`,
-`Checked 1911 files`, and `exit=1`. The exit code is 1 because 136 files in the corpus would be
+Expected: no traceback, `74 files could not be parsed`, `1700 files already sorted`,
+`Checked 1910 files`, and `exit=1`. The exit code is 1 because 136 files in the corpus would be
 re-arranged, which is the pre-existing `--check` contract; it is not caused by the 74 warnings.
+(These figures are one lower than the 1911/1701 originally recorded here: the CLI's
+`_expand_file_paths` uses `glob("**/*.py", recursive=True)`, which does not descend into
+dot-directories, so it misses one file that `pathlib.rglob` — used by `test/smoke_test.py` below —
+does find.)
 
 Then confirm the other files are unaffected:
 
