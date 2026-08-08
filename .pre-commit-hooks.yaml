@@ -4,3 +4,7 @@
   language: python
   entry: sdsort
   types: [python]
+  # sdsort parallelises across worker processes internally (see --jobs). Without this,
+  # pre-commit's own concurrency would run ~cpu_count invocations at once, each spawning up to
+  # cpu_count workers of its own.
+  require_serial: true

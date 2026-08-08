@@ -33,14 +33,21 @@ sdsort --check <file_or_directory>
 
 This will exit with code 1 if any files would be re-arranged, making it suitable for CI pipelines and pre-commit hooks.
 
+### Parallelism
+
+Larger runs are sorted across parallel worker processes. Use `--jobs`/`-j` to control how many:
+
+```bash
+sdsort --jobs 4 <directory_path>
+```
+
+0 (the default) picks one worker per available CPU; 1 disables parallelism and sorts every file in the current process. Runs of fewer than 50 files always stay serial regardless of this setting, since spawning workers costs more than it saves at that scale.
+
 ### Files that cannot be parsed
 
-If sdsort cannot parse a file, it reports the file on stderr and moves on. The rest of the files
-are still sorted, and the exit code is unaffected.
+If sdsort cannot parse a file, it reports the file on stderr and moves on. The rest of the files are still sorted, and the exit code is unaffected.
 
-This usually means the file uses newer syntax than the Python interpreter running sdsort, in which
-case the file itself is perfectly valid and only sdsort's view of it is limited. Running sdsort
-under a newer interpreter resolves it.
+This usually means the file uses newer syntax than the Python interpreter running sdsort, in which case the file itself is perfectly valid and only sdsort's view of it is limited. Running sdsort under a newer interpreter resolves it.
 
 ## Configuration
 
@@ -59,6 +66,8 @@ repos:
     hooks:
       - id: sdsort
 ```
+
+The hook parallelises internally (see [Parallelism](#parallelism)), so it runs with `require_serial: true` to avoid pre-commit's own concurrency multiplying with sdsort's.
 
 ## Maturity
 
