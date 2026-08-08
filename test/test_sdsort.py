@@ -259,6 +259,35 @@ def test_check_still_exits_one_when_a_sortable_file_would_be_rearranged(tmp_path
     assert result.exit_code == 1, result.output
 
 
+def test_unparseable_files_are_reported_on_stderr(tmp_path: Path):
+    (tmp_path / "broken.py").write_text("def f(:\n", encoding="utf-8")
+    shutil.copy(TEST_CASES_DIR / "comments.out.py", tmp_path)
+    runner = CliRunner()
+
+    result = runner.invoke(main, [str(tmp_path)])
+
+    assert "Could not parse the following files:" in result.stderr
+    # str(SyntaxError) renders as "invalid syntax (broken.py, line 1)", repeating a file name that
+    # the line already leads with. The reason must carry the line number without that repetition.
+    assert "broken.py: invalid syntax (line 1)" in result.stderr
+    assert "1 file could not be parsed" in result.stderr
+    assert "1 file already sorted" in result.stdout, "Unparseable files must not inflate this count"
+    assert "Checked 2 files" in result.stdout, "But they are still counted as checked"
+
+
+def test_parallel_run_reports_the_same_warnings_as_serial(tmp_path: Path):
+    for name in ("broken_one.py", "broken_two.py"):
+        (tmp_path / name).write_text("def f(:\n", encoding="utf-8")
+    runner = CliRunner()
+
+    serial = runner.invoke(main, ["-j", "1", str(tmp_path)])
+    parallel = runner.invoke(main, ["-j", "4", str(tmp_path)])
+
+    assert serial.stderr == parallel.stderr
+    assert "broken_one.py" in serial.stderr
+    assert "broken_two.py" in serial.stderr
+
+
 def test_form_feed_between_functions_does_not_crash(tmp_path: Path):
     # A form feed (\x0c) is in-line whitespace to Python's tokenizer, but str.splitlines()
     # treats it as a line break. Splitting on it misaligns line ranges from AST line numbers.

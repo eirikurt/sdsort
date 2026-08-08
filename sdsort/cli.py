@@ -107,8 +107,8 @@ def _worker_count(file_count: int, jobs: int) -> int:
 def _describe_failure(error: Exception) -> str:
     """Describe why a file could not be read, for display next to its path.
 
-    str(SyntaxError) appends ast's placeholder filename -- "invalid syntax (<unknown>, line 1)" --
-    which is noise when the real path is already shown alongside the message.
+    str(SyntaxError) renders as "invalid syntax (broken.py, line 1)", repeating a file name that
+    the caller already prints alongside the reason, so the message is rebuilt from its parts.
     """
     if isinstance(error, SyntaxError):
         message = error.msg or "invalid syntax"
@@ -164,6 +164,15 @@ def _print_results(results: Results, check: bool, duration: float):
             click.secho("Re-arranged the following files:", fg="yellow", bold=True)
         for modified_file in results.modified_files:
             click.echo(f"- {modified_file}")
+    if len(results.unparseable_files) > 0:
+        click.secho("Could not parse the following files:", fg="yellow", bold=True, err=True)
+        for unparseable_file, reason in results.unparseable_files:
+            click.echo(f"- {unparseable_file}: {reason}", err=True)
+        click.secho(
+            f"{pluralize(len(results.unparseable_files), 'file')} could not be parsed",
+            fg="yellow",
+            err=True,
+        )
     if len(results.skipped_files) > 0:
         click.secho(
             f"{pluralize(len(results.skipped_files), 'file')} skipped",
