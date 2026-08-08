@@ -106,16 +106,16 @@ Returns `(outcome, reason)` rather than a bare outcome string, where `reason` is
 outcome except the new `"unparseable"`. The reason is formatted inside the worker, so only `str`
 crosses the process boundary and no exception object needs to be pickled.
 
-`str(SyntaxError)` renders as `invalid syntax (<unknown>, line 1)`; the `<unknown>` filename is
-noise, because the path is already shown alongside the message. The reason is therefore built from
-`e.msg` and `e.lineno`:
+`step_down_sort` passes the real path to `ast.parse`, so `str(SyntaxError)` renders as
+`invalid syntax (broken.py, line 1)` — repeating a file name the caller already prints alongside
+the reason. The reason is therefore built from `e.msg` and `e.lineno`:
 
 ```text
 expected '(' (line 12)
 ```
 
-For a `SyntaxError` with no `lineno`, the message alone is used. For the other caught exception
-types, `str(e)` is used directly.
+For a `SyntaxError` with no `lineno`, the message alone is used. `OSError` uses `e.strerror` where
+it is set, for the same reason: `str(e)` appends the path. Other caught types use `str(e)`.
 
 ### `Results`
 
