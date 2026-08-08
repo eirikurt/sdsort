@@ -108,8 +108,6 @@ def _worker_count(file_count: int, jobs: int, cpu_count: int) -> int:
 def _available_cpu_count() -> int:
     if sys.version_info >= (3, 13):
         return os.process_cpu_count() or 1
-    # Typeshed declares sched_getaffinity only for non-Windows, non-macOS, so the checker cannot
-    # see it here. hasattr is the real guard: it is Linux-only, absent on the BSDs and Solaris.
     if hasattr(os, "sched_getaffinity"):
         return len(os.sched_getaffinity(0))  # pyright: ignore[reportAttributeAccessIssue]
     return os.cpu_count() or 1
