@@ -15,17 +15,9 @@ from .utils.timer import Timer
 
 # TODO: switch to pathlib
 
-# Spawning workers costs a few tens of milliseconds, which only pays for itself once there is a
-# meaningful amount of work to spread across them.
 _MIN_FILES_FOR_PARALLELISM = 50
-
-# A ceiling on worker processes, independent of how it was requested (explicit -j or the CPU-count
-# auto-detection below). Past this, the bookkeeping and IPC overhead of more workers stops paying
-# for itself, and an accidental `-j 5000` should degrade gracefully rather than trying to spawn it.
 _MAX_WORKERS = 64
 
-# Only parse and read failures are tolerated. Anything else is a defect in sdsort itself, and a
-# crash is the right outcome for that: a per-file warning would leave files quietly unsorted.
 _UNPARSEABLE = (SyntaxError, TokenError, UnicodeDecodeError, OSError)
 
 FileOutcome = Union[
@@ -100,9 +92,8 @@ def _sort_each(file_paths: list[str], check: bool, jobs: int) -> list[FileOutcom
     if workers == 1:
         return [sort_one(file_path) for file_path in file_paths]
 
-    # Sorting is ~98% CPU-bound, so only separate processes buy real parallelism. chunksize stays
-    # at 1 because file sizes vary enough that batching them noticeably skews the load balance.
     with ProcessPoolExecutor(max_workers=workers) as pool:
+        # chunksize stays at 1 because file sizes vary enough that batching them noticeably skews the load balance.
         return list(pool.map(sort_one, file_paths, chunksize=1))
 
 
@@ -115,32 +106,14 @@ def _worker_count(file_count: int, jobs: int) -> int:
 
 
 def _available_cpu_count() -> int:
-    """Best-effort count of CPUs this process may actually use.
-
-    os.cpu_count() reports the host's total core count, which overshoots badly when the process is
-    confined by a container CPU quota or by scheduler affinity — the common case for sdsort, which
-    is typically invoked from CI containers and pre-commit hooks rather than bare metal. Prefer, in
-    order: process_cpu_count (3.13+, honours both quotas and affinity), sched_getaffinity (Linux
-    only, honours affinity), then the unconstrained cpu_count as a last resort.
-    """
     if sys.version_info >= (3, 13):
         return os.process_cpu_count() or 1
-    # The platform test is what lets pyright see sched_getaffinity at all, since typeshed declares
-    # it only for non-Windows, non-macOS. hasattr is the runtime guard: the BSDs and Solaris are
-    # also neither of those, and do not provide it either.
     if sys.platform != "win32" and sys.platform != "darwin" and hasattr(os, "sched_getaffinity"):
         return len(os.sched_getaffinity(0))
     return os.cpu_count() or 1
 
 
 def _describe_failure(error: Exception) -> str:
-    """Render an exception's message for display next to the file path that caused it.
-
-    str(SyntaxError) renders as "invalid syntax (broken.py, line 1)", repeating a file name that
-    the caller already prints alongside the reason, so the message is rebuilt from its parts.
-    str(OSError) has the same problem — e.g. "[Errno 13] Permission denied: './noread.py'" — so
-    its strerror is used instead when the OS supplied one.
-    """
     if isinstance(error, SyntaxError):
         message = error.msg or "invalid syntax"
         return f"{message} (line {error.lineno})" if error.lineno is not None else message
@@ -150,12 +123,6 @@ def _describe_failure(error: Exception) -> str:
 
 
 def _sort_file(file_path: str, check: bool) -> FileOutcome:
-    """Sort a single file, writing it back in place unless this is a --check run.
-
-    This runs inside a worker process, so it writes the file itself rather than shipping the whole
-    modified source back to the parent, and it renders the failure reason to a string here so that
-    only picklable data crosses the process boundary.
-    """
     try:
         modification = step_down_sort(file_path)
     except _UNPARSEABLE as error:

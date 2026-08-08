@@ -42,8 +42,6 @@ def find_first_line(node: stmt, source_lines: list[str]) -> int:
 
 
 def find_last_line(function: ClassOrFunction, source_lines: list[str]) -> int:
-    # A node's own end_lineno already spans every one of its descendants, so there is no need to
-    # walk the subtree looking for the maximum.
     stop = function.end_lineno or function.lineno
 
     # Probe a bit further until we find a blank line or one with less indentation than the function/class body
