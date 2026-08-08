@@ -113,15 +113,6 @@ def _available_cpu_count() -> int:
     return os.cpu_count() or 1
 
 
-def _describe_failure(error: Exception) -> str:
-    if isinstance(error, SyntaxError):
-        message = error.msg or "invalid syntax"
-        return f"{message} (line {error.lineno})" if error.lineno is not None else message
-    if isinstance(error, OSError) and error.strerror is not None:
-        return error.strerror
-    return str(error)
-
-
 def _sort_file(file_path: str, check: bool) -> FileOutcome:
     try:
         modification = step_down_sort(file_path)
@@ -138,6 +129,15 @@ def _sort_file(file_path: str, check: bool) -> FileOutcome:
             return ("skipped", None)
         case _:
             return ("unchanged", None)
+
+
+def _describe_failure(error: Exception) -> str:
+    if isinstance(error, SyntaxError):
+        message = error.msg or "invalid syntax"
+        return f"{message} (line {error.lineno})" if error.lineno is not None else message
+    if isinstance(error, OSError) and error.strerror is not None:
+        return error.strerror
+    return str(error)
 
 
 @dataclass
