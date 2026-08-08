@@ -60,7 +60,7 @@ To prevent sdsort from modifying a particular file, add a `# sdsort: skip_file` 
 ```yaml
 repos:
   - repo: https://github.com/eirikurt/sdsort
-    rev: v1.1.0
+    rev: v1.2.0
     hooks:
       - id: sdsort
 ```
