@@ -280,9 +280,9 @@ def test_unparseable_files_are_reported_on_stderr(tmp_path: Path):
     result = runner.invoke(main, [str(tmp_path)])
 
     assert "Could not parse the following files:" in result.stderr
-    assert "broken.py" in result.stderr
-    assert "(line 1)" in result.stderr, "The reason should carry the line number"
-    assert "<unknown>" not in result.stderr, "ast's placeholder filename must not leak through"
+    # str(SyntaxError) renders as "invalid syntax (broken.py, line 1)", repeating a file name that
+    # the line already leads with. The reason must carry the line number without that repetition.
+    assert "broken.py: invalid syntax (line 1)" in result.stderr
     assert "1 file could not be parsed" in result.stderr
     assert "1 file already sorted" in result.stdout, "Unparseable files must not inflate this count"
     assert "Checked 2 files" in result.stdout, "But they are still counted as checked"
@@ -325,19 +325,35 @@ In `sdsort/cli.py`, insert this block into `_print_results`, directly after the
         )
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [ ] **Step 4: Correct the `_describe_failure` docstring**
+
+Task 1's docstring justified the formatting with the wrong mechanism. `step_down_sort` calls
+`parse(source, filename=python_file_path)`, so `str(SyntaxError)` carries the *real* file name, not
+ast's `<unknown>` placeholder. The formatting is still right, but for a different reason. In
+`sdsort/cli.py`, replace the second line of the `_describe_failure` docstring:
+
+```python
+def _describe_failure(error: Exception) -> str:
+    """Describe why a file could not be read, for display next to its path.
+
+    str(SyntaxError) renders as "invalid syntax (broken.py, line 1)", repeating a file name that
+    the caller already prints alongside the reason, so the message is rebuilt from its parts.
+    """
+```
+
+- [ ] **Step 5: Run the tests to verify they pass**
 
 Run: `uv run pytest test/test_sdsort.py -v`
 
 Expected: PASS, 55 passed and 1 skipped.
 
-- [ ] **Step 5: Run the full check suite**
+- [ ] **Step 6: Run the full check suite**
 
 Run: `make rpt`
 
 Expected: ruff clean, pyright `0 errors`, all tests pass.
 
-- [ ] **Step 6: Verify against the real-world corpus**
+- [ ] **Step 7: Verify against the real-world corpus**
 
 First isolate the exit-code claim. `test/repos/pyochain` contains 26 unparseable files and no
 files that need re-arranging, so it is the case where the *only* problem is unparseable files:
@@ -367,7 +383,7 @@ uv run python test/smoke_test.py 2>&1 | tail -3
 
 Expected: `files checked: 1911   reordered: 124   failures: 0`, unchanged from before.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
 git add sdsort/cli.py test/test_sdsort.py
