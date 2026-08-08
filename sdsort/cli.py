@@ -1,10 +1,11 @@
 import os
+import sys
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass, field
 from functools import partial
 from glob import glob
 from tokenize import TokenError
-from typing import Iterable, Iterator, Literal, Union
+from typing import Iterable, Literal, Union
 
 import click
 
@@ -18,9 +19,14 @@ from .utils.timer import Timer
 # meaningful amount of work to spread across them.
 _MIN_FILES_FOR_PARALLELISM = 50
 
+# A ceiling on worker processes, independent of how it was requested (explicit -j or the CPU-count
+# auto-detection below). Past this, the bookkeeping and IPC overhead of more workers stops paying
+# for itself, and an accidental `-j 5000` should degrade gracefully rather than trying to spawn it.
+_MAX_WORKERS = 64
+
 # Only parse and read failures are tolerated. Anything else is a defect in sdsort itself, and a
 # crash is the right outcome for that: a per-file warning would leave files quietly unsorted.
-_UNREADABLE = (SyntaxError, TokenError, UnicodeDecodeError, OSError)
+_UNPARSEABLE = (SyntaxError, TokenError, UnicodeDecodeError, OSError)
 
 FileOutcome = Union[
     tuple[Literal["sorted", "skipped", "unchanged"], None],
@@ -41,7 +47,12 @@ FileOutcome = Union[
     "-j",
     type=click.IntRange(min=0),
     default=0,
-    help="Number of parallel worker processes. 0 (the default) picks one per CPU; 1 disables parallelism.",
+    help=(
+        "Number of parallel worker processes. 0 (the default) picks one per available CPU; 1 "
+        f"disables parallelism. Runs of fewer than {_MIN_FILES_FOR_PARALLELISM} files always stay "
+        "serial regardless of this setting, since spawning workers costs more than it saves at "
+        "that scale."
+    ),
 )
 def main(paths: tuple[str, ...], check: bool, jobs: int):
     file_paths = _expand_file_paths(paths)
@@ -82,37 +93,56 @@ def _sort_files(file_paths: list[str], check: bool, jobs: int):
     return results
 
 
-def _sort_each(file_paths: list[str], check: bool, jobs: int) -> Iterator[FileOutcome]:
-    """Sort every file, yielding one outcome per input path, in input order."""
+def _sort_each(file_paths: list[str], check: bool, jobs: int) -> list[FileOutcome]:
+    """Sort every file, returning one outcome per input path, in input order."""
     sort_one = partial(_sort_file, check=check)
     workers = _worker_count(len(file_paths), jobs)
     if workers == 1:
-        return iter([sort_one(file_path) for file_path in file_paths])
+        return [sort_one(file_path) for file_path in file_paths]
 
     # Sorting is ~98% CPU-bound, so only separate processes buy real parallelism. chunksize stays
     # at 1 because file sizes vary enough that batching them noticeably skews the load balance.
     with ProcessPoolExecutor(max_workers=workers) as pool:
-        outcomes = list(pool.map(sort_one, file_paths, chunksize=1))
-    return iter(outcomes)
+        return list(pool.map(sort_one, file_paths, chunksize=1))
 
 
 def _worker_count(file_count: int, jobs: int) -> int:
     if jobs == 0:
         if file_count < _MIN_FILES_FOR_PARALLELISM:
             return 1
-        jobs = os.cpu_count() or 1
-    return max(1, min(jobs, file_count))
+        jobs = _available_cpu_count()
+    return max(1, min(jobs, file_count, _MAX_WORKERS))
+
+
+def _available_cpu_count() -> int:
+    """Best-effort count of CPUs this process may actually use.
+
+    os.cpu_count() reports the host's total core count, which overshoots badly when the process is
+    confined by a container CPU quota or by scheduler affinity — the common case for sdsort, which
+    is typically invoked from CI containers and pre-commit hooks rather than bare metal. Prefer, in
+    order: process_cpu_count (3.13+, honours both quotas and affinity), sched_getaffinity (Linux
+    only, honours affinity), then the unconstrained cpu_count as a last resort.
+    """
+    if sys.version_info >= (3, 13):
+        return os.process_cpu_count() or 1
+    if sys.platform != "win32" and sys.platform != "darwin":
+        return len(os.sched_getaffinity(0))
+    return os.cpu_count() or 1
 
 
 def _describe_failure(error: Exception) -> str:
-    """Describe why a file could not be read, for display next to its path.
+    """Render an exception's message for display next to the file path that caused it.
 
     str(SyntaxError) renders as "invalid syntax (broken.py, line 1)", repeating a file name that
     the caller already prints alongside the reason, so the message is rebuilt from its parts.
+    str(OSError) has the same problem — e.g. "[Errno 13] Permission denied: './noread.py'" — so
+    its strerror is used instead when the OS supplied one.
     """
     if isinstance(error, SyntaxError):
         message = error.msg or "invalid syntax"
         return f"{message} (line {error.lineno})" if error.lineno is not None else message
+    if isinstance(error, OSError) and error.strerror is not None:
+        return error.strerror
     return str(error)
 
 
@@ -125,7 +155,7 @@ def _sort_file(file_path: str, check: bool) -> FileOutcome:
     """
     try:
         modification = step_down_sort(file_path)
-    except _UNREADABLE as error:
+    except _UNPARSEABLE as error:
         return ("unparseable", _describe_failure(error))
 
     match modification:
