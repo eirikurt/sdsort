@@ -1,4 +1,5 @@
 import ast
+import os
 import shutil
 import sys
 from os import mkdir
@@ -8,6 +9,7 @@ import pytest
 from click.testing import CliRunner
 
 from sdsort import main, step_down_sort
+from sdsort.cli import _MIN_FILES_FOR_PARALLELISM, _worker_count
 from sdsort.context import _targets_python314_or_newer
 from sdsort.utils.file import read_file
 
@@ -171,6 +173,45 @@ def test_targets_python314_handles_prerelease_specifiers(tmp_path: Path, require
         f'[project]\nrequires-python = "{requires_python}"\n', encoding="utf-8"
     )
     assert _targets_python314_or_newer(tmp_path) is expected
+
+
+@pytest.mark.parametrize(
+    "file_count,jobs,expected",
+    [
+        (1000, 0, os.cpu_count() or 1),  # auto: one worker per CPU
+        (1000, 1, 1),  # explicit -j 1 disables parallelism
+        (1000, 3, 3),  # explicit job count is honoured
+        (_MIN_FILES_FOR_PARALLELISM - 1, 0, 1),  # too little work to be worth spawning workers
+        (_MIN_FILES_FOR_PARALLELISM, 0, os.cpu_count() or 1),
+        (2, 8, 2),  # never more workers than files
+        (0, 8, 1),  # no files at all must not ask for zero workers
+    ],
+)
+def test_worker_count(file_count: int, jobs: int, expected: int):
+    assert _worker_count(file_count, jobs) == expected
+
+
+def test_parallel_run_matches_serial_run(tmp_path: Path):
+    # Sorting happens in worker processes, so verify that route writes exactly what the
+    # single-process route does.
+    test_cases = ["comments", "dataclass", "single_class", "top_level_functions"]
+    serial_dir = tmp_path / "serial"
+    parallel_dir = tmp_path / "parallel"
+    for directory in (serial_dir, parallel_dir):
+        mkdir(directory)
+        for tc in test_cases:
+            shutil.copy(TEST_CASES_DIR / f"{tc}.in.py", directory)
+
+    runner = CliRunner()
+    serial_result = runner.invoke(main, ["-j", "1", str(serial_dir)])
+    parallel_result = runner.invoke(main, ["-j", "4", str(parallel_dir)])
+
+    assert serial_result.exit_code == 0, serial_result.output
+    assert parallel_result.exit_code == 0, parallel_result.output
+    for tc in test_cases:
+        expected = read_file(TEST_CASES_DIR / f"{tc}.out.py")
+        assert read_file(serial_dir / f"{tc}.in.py") == expected
+        assert read_file(parallel_dir / f"{tc}.in.py") == expected, f"{tc} differs when sorted in parallel"
 
 
 def test_form_feed_between_functions_does_not_crash(tmp_path: Path):

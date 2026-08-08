@@ -1,7 +1,9 @@
 import os
+from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass, field
+from functools import partial
 from glob import glob
-from typing import Iterable
+from typing import Iterable, Iterator
 
 import click
 
@@ -10,6 +12,10 @@ from .utils.pluralize import pluralize
 from .utils.timer import Timer
 
 # TODO: switch to pathlib
+
+# Spawning workers costs a few tens of milliseconds, which only pays for itself once there is a
+# meaningful amount of work to spread across them.
+_MIN_FILES_FOR_PARALLELISM = 50
 
 
 @click.command()
@@ -20,11 +26,18 @@ from .utils.timer import Timer
     is_eager=True,
 )
 @click.option("--check", is_flag=True, help="Don't write changes, just report if files would be re-arranged.")
-def main(paths: tuple[str, ...], check: bool):
+@click.option(
+    "--jobs",
+    "-j",
+    type=click.IntRange(min=0),
+    default=0,
+    help="Number of parallel worker processes. 0 (the default) picks one per CPU; 1 disables parallelism.",
+)
+def main(paths: tuple[str, ...], check: bool, jobs: int):
     file_paths = _expand_file_paths(paths)
 
     with Timer() as t:
-        results = _sort_files(sorted(file_paths), check)
+        results = _sort_files(sorted(file_paths), check, jobs)
 
     _print_results(results, check, t.elapsed)
 
@@ -42,23 +55,57 @@ def _expand_file_paths(paths: tuple[str, ...]) -> Iterable[str]:
     return file_paths
 
 
-def _sort_files(file_paths: list[str], check: bool):
+def _sort_files(file_paths: list[str], check: bool, jobs: int):
     results = Results()
 
-    for file_path in file_paths:
-        modification = step_down_sort(file_path)
-        match modification:
-            case ("sorted", modified_source):
-                if not check:
-                    with open(file_path, "w", encoding="utf-8") as file:
-                        file.write(modified_source)
+    for file_path, outcome in zip(file_paths, _sort_each(file_paths, check, jobs)):
+        match outcome:
+            case "sorted":
                 results.modified_files.append(file_path)
-            case ("skipped", _):
+            case "skipped":
                 results.skipped_files.append(file_path)
-            case ("unchanged", _):
+            case "unchanged":
                 results.pristine_files.append(file_path)
 
     return results
+
+
+def _sort_each(file_paths: list[str], check: bool, jobs: int) -> Iterator[str]:
+    """Sort every file, yielding one outcome per input path, in input order."""
+    sort_one = partial(_sort_file, check=check)
+    workers = _worker_count(len(file_paths), jobs)
+    if workers == 1:
+        return iter([sort_one(file_path) for file_path in file_paths])
+
+    # Sorting is ~98% CPU-bound, so only separate processes buy real parallelism. chunksize stays
+    # at 1 because file sizes vary enough that batching them noticeably skews the load balance.
+    with ProcessPoolExecutor(max_workers=workers) as pool:
+        outcomes = list(pool.map(sort_one, file_paths, chunksize=1))
+    return iter(outcomes)
+
+
+def _worker_count(file_count: int, jobs: int) -> int:
+    if jobs == 0:
+        if file_count < _MIN_FILES_FOR_PARALLELISM:
+            return 1
+        jobs = os.cpu_count() or 1
+    return max(1, min(jobs, file_count))
+
+
+def _sort_file(file_path: str, check: bool) -> str:
+    """Sort a single file, writing it back in place unless this is a --check run.
+
+    This runs inside a worker process, so it writes the file itself rather than shipping the whole
+    modified source back to the parent.
+    """
+    match step_down_sort(file_path):
+        case ("sorted", modified_source):
+            if not check:
+                with open(file_path, "w", encoding="utf-8") as file:
+                    file.write(modified_source)
+            return "sorted"
+        case (outcome, _):
+            return outcome
 
 
 @dataclass
