@@ -125,7 +125,10 @@ def _available_cpu_count() -> int:
     """
     if sys.version_info >= (3, 13):
         return os.process_cpu_count() or 1
-    if sys.platform != "win32" and sys.platform != "darwin":
+    # The platform test is what lets pyright see sched_getaffinity at all, since typeshed declares
+    # it only for non-Windows, non-macOS. hasattr is the runtime guard: the BSDs and Solaris are
+    # also neither of those, and do not provide it either.
+    if sys.platform != "win32" and sys.platform != "darwin" and hasattr(os, "sched_getaffinity"):
         return len(os.sched_getaffinity(0))
     return os.cpu_count() or 1
 

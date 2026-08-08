@@ -9,7 +9,7 @@ import pytest
 from click.testing import CliRunner
 
 from sdsort import cli, main, step_down_sort
-from sdsort.cli import _MAX_WORKERS, _MIN_FILES_FOR_PARALLELISM, _worker_count
+from sdsort.cli import _MAX_WORKERS, _MIN_FILES_FOR_PARALLELISM, _available_cpu_count, _worker_count
 from sdsort.context import _targets_python314_or_newer
 from sdsort.utils.file import read_file
 
@@ -200,6 +200,19 @@ def test_worker_count_clamps_the_auto_detected_cpu_count_too(monkeypatch: pytest
     # e.g. a very large host or a misreported affinity mask.
     monkeypatch.setattr(cli, "_available_cpu_count", lambda: 200)
     assert _worker_count(10_000, 0) == _MAX_WORKERS
+
+
+@pytest.mark.skipif(
+    sys.version_info >= (3, 13),
+    reason="os.process_cpu_count() short-circuits the affinity branch on 3.13+",
+)
+def test_cpu_count_falls_back_when_sched_getaffinity_is_missing(monkeypatch: pytest.MonkeyPatch):
+    # sched_getaffinity is Linux-only, but the BSDs and Solaris are neither Windows nor macOS, so a
+    # platform test alone lets them reach a call that does not exist there.
+    monkeypatch.setattr(sys, "platform", "freebsd14")
+    monkeypatch.delattr(os, "sched_getaffinity", raising=False)
+
+    assert _available_cpu_count() >= 1
 
 
 def test_parallel_run_matches_serial_run(tmp_path: Path):
