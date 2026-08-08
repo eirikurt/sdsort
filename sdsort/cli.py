@@ -88,7 +88,7 @@ def _sort_files(file_paths: list[str], check: bool, jobs: int):
 def _sort_each(file_paths: list[str], check: bool, jobs: int) -> list[FileOutcome]:
     """Sort every file, returning one outcome per input path, in input order."""
     sort_one = partial(_sort_file, check=check)
-    workers = _worker_count(len(file_paths), jobs)
+    workers = _worker_count(len(file_paths), jobs, _available_cpu_count())
     if workers == 1:
         return [sort_one(file_path) for file_path in file_paths]
 
@@ -97,19 +97,21 @@ def _sort_each(file_paths: list[str], check: bool, jobs: int) -> list[FileOutcom
         return list(pool.map(sort_one, file_paths, chunksize=1))
 
 
-def _worker_count(file_count: int, jobs: int) -> int:
+def _worker_count(file_count: int, jobs: int, cpu_count: int) -> int:
     if jobs == 0:
         if file_count < _MIN_FILES_FOR_PARALLELISM:
             return 1
-        jobs = _available_cpu_count()
+        jobs = cpu_count
     return max(1, min(jobs, file_count, _MAX_WORKERS))
 
 
 def _available_cpu_count() -> int:
     if sys.version_info >= (3, 13):
         return os.process_cpu_count() or 1
-    if sys.platform != "win32" and sys.platform != "darwin" and hasattr(os, "sched_getaffinity"):
-        return len(os.sched_getaffinity(0))
+    # Typeshed declares sched_getaffinity only for non-Windows, non-macOS, so the checker cannot
+    # see it here. hasattr is the real guard: it is Linux-only, absent on the BSDs and Solaris.
+    if hasattr(os, "sched_getaffinity"):
+        return len(os.sched_getaffinity(0))  # pyright: ignore[reportAttributeAccessIssue]
     return os.cpu_count() or 1
 
 

@@ -9,7 +9,7 @@ import pytest
 from click.testing import CliRunner
 
 from sdsort import cli, main, step_down_sort
-from sdsort.cli import _MAX_WORKERS, _MIN_FILES_FOR_PARALLELISM, _available_cpu_count, _worker_count
+from sdsort.cli import _MAX_WORKERS, _MIN_FILES_FOR_PARALLELISM, _worker_count
 from sdsort.context import _targets_python314_or_newer
 from sdsort.utils.file import read_file
 
@@ -176,43 +176,21 @@ def test_targets_python314_handles_prerelease_specifiers(tmp_path: Path, require
 
 
 @pytest.mark.parametrize(
-    "file_count,jobs,expected",
+    "file_count,jobs,cpu_count,expected",
     [
-        (1000, 0, 4),  # auto: one worker per available CPU
-        (1000, 1, 1),  # explicit -j 1 disables parallelism
-        (1000, 3, 3),  # explicit job count is honoured
-        (_MIN_FILES_FOR_PARALLELISM - 1, 0, 1),  # too little work to be worth spawning workers
-        (_MIN_FILES_FOR_PARALLELISM, 0, 4),
-        (2, 8, 2),  # never more workers than files
-        (0, 8, 1),  # no files at all must not ask for zero workers
-        (10_000, 5000, _MAX_WORKERS),  # an oversized explicit -j degrades gracefully instead of erroring
+        (1000, 0, 4, 4),  # auto: one worker per available CPU
+        (1000, 1, 4, 1),  # explicit -j 1 disables parallelism
+        (1000, 3, 4, 3),  # explicit job count is honoured
+        (_MIN_FILES_FOR_PARALLELISM - 1, 0, 4, 1),  # too little work to be worth spawning workers
+        (_MIN_FILES_FOR_PARALLELISM, 0, 4, 4),
+        (2, 8, 4, 2),  # never more workers than files
+        (0, 8, 4, 1),  # no files at all must not ask for zero workers
+        (10_000, 5000, 4, _MAX_WORKERS),  # an oversized explicit -j degrades gracefully
+        (10_000, 0, 200, _MAX_WORKERS),  # the ceiling applies to a detected count too
     ],
 )
-def test_worker_count(monkeypatch: pytest.MonkeyPatch, file_count: int, jobs: int, expected: int):
-    # _available_cpu_count() is the single source of truth for the "auto" CPU count; pin it so
-    # this test's expectations don't just restate whatever the host machine happens to report.
-    monkeypatch.setattr(cli, "_available_cpu_count", lambda: 4)
-    assert _worker_count(file_count, jobs) == expected
-
-
-def test_worker_count_clamps_the_auto_detected_cpu_count_too(monkeypatch: pytest.MonkeyPatch):
-    # The ceiling applies whether the worker count came from an explicit -j or from CPU detection,
-    # e.g. a very large host or a misreported affinity mask.
-    monkeypatch.setattr(cli, "_available_cpu_count", lambda: 200)
-    assert _worker_count(10_000, 0) == _MAX_WORKERS
-
-
-@pytest.mark.skipif(
-    sys.version_info >= (3, 13),
-    reason="os.process_cpu_count() short-circuits the affinity branch on 3.13+",
-)
-def test_cpu_count_falls_back_when_sched_getaffinity_is_missing(monkeypatch: pytest.MonkeyPatch):
-    # sched_getaffinity is Linux-only, but the BSDs and Solaris are neither Windows nor macOS, so a
-    # platform test alone lets them reach a call that does not exist there.
-    monkeypatch.setattr(sys, "platform", "freebsd14")
-    monkeypatch.delattr(os, "sched_getaffinity", raising=False)
-
-    assert _available_cpu_count() >= 1
+def test_worker_count(file_count: int, jobs: int, cpu_count: int, expected: int):
+    assert _worker_count(file_count, jobs, cpu_count) == expected
 
 
 def test_parallel_run_matches_serial_run(tmp_path: Path):
