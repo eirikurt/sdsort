@@ -2,6 +2,7 @@ import ast
 import os
 import shutil
 import sys
+import tomllib
 from os import mkdir
 from pathlib import Path
 
@@ -267,10 +268,8 @@ def test_check_flag_exits_cleanly_when_files_are_already_sorted(runner: CliRunne
     ],
 )
 def test_targets_python314_handles_prerelease_specifiers(tmp_path: Path, requires_python: str, expected: bool):
-    (tmp_path / "pyproject.toml").write_text(
-        f'[project]\nrequires-python = "{requires_python}"\n', encoding="utf-8"
-    )
-    assert _targets_python314_or_newer(tmp_path) is expected
+    txt = f'[project]\nrequires-python = "{requires_python}"\n'
+    assert _targets_python314_or_newer(tomllib.loads(txt)) is expected
 
 
 @pytest.mark.parametrize(
