@@ -109,7 +109,7 @@ def _sort_methods_within_class(source_lines: list[str], class_def: ClassDef, con
     # TODO: recursively sort methods within nested classes?
 
     # Find methods
-    blocks = ClassBlock(class_def, source_lines, context).method_blocks
+    blocks = tuple(ClassBlock(class_def, source_lines, context).method_blocks)
 
     # Build dependency graph among methods
     dependencies = _find_dependencies(blocks, _method_call_target)

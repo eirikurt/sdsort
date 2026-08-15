@@ -14,6 +14,7 @@ if TYPE_CHECKING:
 @dataclass
 class Context:
     deferred_annotations: bool
+    ordering_rules: OrderingRules | None = None
 
 
 def gather_context(root_node: Module, file_path: Path | None = None) -> Context:
@@ -27,6 +28,14 @@ def gather_context(root_node: Module, file_path: Path | None = None) -> Context:
         deferred_annotations = _targets_python314_or_newer(file_path.parent)
 
     return Context(deferred_annotations=deferred_annotations)
+
+
+@dataclass(slots=True)
+class OrderingRules:
+    dunder: int
+    private: int
+    protected: int
+    public: int
 
 
 @lru_cache

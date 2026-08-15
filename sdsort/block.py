@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import itertools
 import sys
 from abc import ABC, abstractmethod
 from ast import (
@@ -20,7 +21,8 @@ from ast import (
     stmt,
     walk,
 )
-from typing import TYPE_CHECKING
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Self
 
 if sys.version_info >= (3, 12):
     # PEP 695 `type X = ...` aliases (ast.TypeAlias) only exist on Python 3.12+.
@@ -38,7 +40,9 @@ from .utils.ast import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Collection, Generator
+    from collections.abc import Collection, Generator, Iterable, Iterator
+
+    from sdsort.context import OrderingRules
 
     from .context import Context
 
@@ -172,19 +176,24 @@ class ClassBlock(Block):
         super().__init__(node, context)
         self.start, self.end = determine_line_range(node, source_lines)
         method_nodes = get_method_nodes(node)
-        self._methods: list[FunctionBlock] = []
-        current_block: Block | None = None
-        for method_node in method_nodes:
-            if current_block is None or not current_block.append(method_node):
-                current_block = FunctionBlock(method_node, source_lines, self._context)
-                self._methods.append(current_block)
-        resolve_overlapping_ranges(self._methods)
+        match context.ordering_rules:
+            case None:
+                methods: list[FunctionBlock] = []
+                current_block: Block | None = None
+                for method_node in method_nodes:
+                    if current_block is None or not current_block.append(method_node):
+                        current_block = FunctionBlock(method_node, source_lines, self._context)
+                        methods.append(current_block)
+                self._methods = MethodsPartitions(Partition(methods))
+            case rules:
+                self._methods = MethodsPartitions.from_nodes(method_nodes, source_lines, context).set_ranks(rules)
+        resolve_overlapping_ranges(self.method_blocks)
 
     def append(self, node: AST) -> bool:
         return False
 
     def find_calls(self) -> Generator[Call, None, None]:
-        for method in self._methods:
+        for method in self.method_blocks:
             yield from method.find_calls()
 
     def find_predecessors(self) -> Generator[str, None, None]:
@@ -207,7 +216,7 @@ class ClassBlock(Block):
                     if isinstance(node, Name) and not isinstance(node.ctx, Store):
                         yield node.id
 
-        for method in self._methods:
+        for method in self.method_blocks:
             yield from method.find_predecessors()
 
     def _reference_subtrees(self, statement: stmt) -> Generator[AST, None, None]:
@@ -223,11 +232,66 @@ class ClassBlock(Block):
         return [n.name for n in self._nodes]
 
     @property
-    def method_blocks(self) -> Collection[Block]:
+    def method_blocks(self) -> Iterator[FunctionBlock]:
+        return itertools.chain.from_iterable(p.methods for p in self._methods.iter())
+
+    @property
+    def methods_partitions(self) -> MethodsPartitions:
         return self._methods
 
 
-def resolve_overlapping_ranges(blocks: Collection[Block]) -> None:
+@dataclass(slots=True)
+class Partition:
+    """A single partition of methods, with it's own rank and list of methods."""
+
+    methods: list[FunctionBlock] = field(default_factory=list)
+    rank: int = field(default=0)
+
+
+@dataclass(slots=True)
+class MethodsPartitions:
+    private: Partition = field(default_factory=Partition)
+    """All methods whose names start with a double underscore but do not end with a double underscore (e.g. `__my_method`)."""
+    protected: Partition = field(default_factory=Partition)
+    """All methods whose names start with a double underscore but do not end with a double underscore (e.g. `__my_method`)."""
+    dunder: Partition = field(default_factory=Partition)
+    """All methods whose names start and end with a double underscore (e.g. `__init__`)."""
+    public: Partition = field(default_factory=Partition)
+    """All methods whose names do not start with an underscore (e.g. `my_method`)."""
+
+    @classmethod
+    def from_nodes(
+        cls, method_nodes: Iterable[FunctionDef | AsyncFunctionDef], source_lines: list[str], context: Context
+    ) -> Self:
+        current_block: Block | None = None
+        slf = cls()
+        for method_node in method_nodes:
+            if current_block is None or not current_block.append(method_node):
+                current_block = FunctionBlock(method_node, source_lines, context)
+                name = method_node.name
+                if name.startswith("__"):
+                    if name.endswith("__"):
+                        slf.dunder.methods.append(current_block)
+                    else:
+                        slf.private.methods.append(current_block)
+                elif name.startswith("_"):
+                    slf.protected.methods.append(current_block)
+                else:
+                    slf.public.methods.append(current_block)
+        return slf
+
+    def set_ranks(self, rules: OrderingRules) -> Self:
+        self.dunder.rank = rules.dunder
+        self.private.rank = rules.private
+        self.protected.rank = rules.protected
+        self.public.rank = rules.public
+        return self
+
+    def iter(self) -> Iterator[Partition]:
+        return iter((self.dunder, self.private, self.protected, self.public))
+
+
+def resolve_overlapping_ranges(blocks: Iterable[Block]) -> None:
     running_end = 0
     for block in blocks:
         block.start = max(block.start, running_end)
