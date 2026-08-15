@@ -196,7 +196,7 @@ class ClassBlock(Block):
         return False
 
     def find_calls(self) -> Generator[Call, None, None]:
-        for method in self.method_blocks:
+        for method in self._methods:
             yield from method.find_calls()
 
     def find_predecessors(self) -> Generator[str, None, None]:
@@ -219,7 +219,7 @@ class ClassBlock(Block):
                     if isinstance(node, Name) and not isinstance(node.ctx, Store):
                         yield node.id
 
-        for method in self.method_blocks:
+        for method in self._methods:
             yield from method.find_predecessors()
 
     def _reference_subtrees(self, statement: stmt) -> Generator[AST, None, None]:
