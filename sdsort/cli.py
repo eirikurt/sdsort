@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import os
 import sys
-from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass, field
 from functools import partial
 from glob import glob
@@ -95,6 +94,8 @@ def _sort_each(file_paths: list[str], check: bool, jobs: int) -> list[FileOutcom
     workers = _worker_count(len(file_paths), jobs, _available_cpu_count())
     if workers == 1:
         return [sort_one(file_path) for file_path in file_paths]
+
+    from concurrent.futures import ProcessPoolExecutor
 
     with ProcessPoolExecutor(max_workers=workers) as pool:
         # chunksize stays at 1 because file sizes vary enough that batching them noticeably skews the load balance.
