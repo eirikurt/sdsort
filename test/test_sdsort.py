@@ -101,42 +101,84 @@ def test_all_cases(test_case: str):
 
 
 @pytest.mark.parametrize(
-    "case_name,ranks",
+    "case_name,expected_case_name,ranks,sort_by_name",
     [
         (
             "partitioned_methods",
+            "partitioned_methods",
             VisibilityRanks(dunder=1, private=3, protected=3, public=2),
+            True,
+        ),
+        (
+            "partitioned_methods",
+            "partitioned_methods_without_name",
+            VisibilityRanks(dunder=1, private=3, protected=3, public=2),
+            False,
         ),
         (
             "visibility_and_name_dependency_chain",
+            "visibility_and_name_dependency_chain",
             VisibilityRanks(dunder=4, private=1, protected=3, public=2),
+            True,
         ),
         (
             "visibility_and_name_cross_partition_dependencies",
+            "visibility_and_name_cross_partition_dependencies",
             VisibilityRanks(dunder=4, private=3, protected=2, public=1),
+            True,
         ),
         (
             "async_methods_with_visibility_and_name",
+            "async_methods_with_visibility_and_name",
             VisibilityRanks(dunder=1, private=2, protected=3, public=4),
+            True,
         ),
         (
             "overloads_with_visibility_and_name",
+            "overloads_with_visibility_and_name",
             VisibilityRanks(dunder=1, private=2, protected=3, public=4),
+            True,
         ),
         (
             "visibility_and_name_recursive_methods",
+            "visibility_and_name_recursive_methods",
             VisibilityRanks(dunder=1, private=2, protected=3, public=4),
+            True,
+        ),
+        (
+            "partial_visibility_ranks",
+            "partial_visibility_ranks",
+            VisibilityRanks(dunder=1, private=2, protected=None, public=None),
+            False,
+        ),
+        (
+            "partial_visibility_ranks",
+            "partial_visibility_ranks",
+            VisibilityRanks(dunder=1, private=None, protected=None, public=None),
+            False,
+        ),
+        (
+            "partial_visibility_ranks",
+            "partial_visibility_ranks_by_name",
+            VisibilityRanks(dunder=1, private=2, protected=None, public=None),
+            True,
         ),
     ],
 )
-def test_visibility_and_name_cases(monkeypatch: pytest.MonkeyPatch, case_name: str, ranks: VisibilityRanks):
+def test_visibility_and_name_cases(
+    monkeypatch: pytest.MonkeyPatch,
+    case_name: str,
+    expected_case_name: str,
+    ranks: VisibilityRanks[int | None],
+    sort_by_name: bool,
+):
     def configured_context(_root: ast.Module, _path: Path | None = None) -> Context:
-        return Context(False, ranks, sort_by_name=True)
+        return Context(False, ranks, sort_by_name=sort_by_name)
 
     monkeypatch.setattr(sort, "gather_context", configured_context)
     _, actual_output = step_down_sort(TEST_CASES_DIR / f"{case_name}.in.py")
 
-    assert actual_output == read_file(TEST_CASES_DIR / f"{case_name}.out.py")
+    assert actual_output == read_file(TEST_CASES_DIR / f"{expected_case_name}.out.py")
 
 
 @pytest.mark.skipif(sys.version_info < (3, 12), reason="`type` alias statement requires Python 3.12+")
