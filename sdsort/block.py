@@ -185,9 +185,9 @@ class ClassBlock(Block):
                         current_block = FunctionBlock(method_node, source_lines, self._context)
                         methods.append(current_block)
                 self._methods = MethodsPartitions(Partition(methods))
+                resolve_overlapping_ranges(self.method_blocks)
             case rules:
                 self._methods = MethodsPartitions.from_nodes(method_nodes, source_lines, context).set_ranks(rules)
-        resolve_overlapping_ranges(self.method_blocks)
 
     def append(self, node: AST) -> bool:
         return False
@@ -264,10 +264,12 @@ class MethodsPartitions:
         cls, method_nodes: Iterable[FunctionDef | AsyncFunctionDef], source_lines: list[str], context: Context
     ) -> Self:
         current_block: Block | None = None
+        running_end = 0
         slf = cls()
         for method_node in method_nodes:
             if current_block is None or not current_block.append(method_node):
                 current_block = FunctionBlock(method_node, source_lines, context)
+                current_block.start = max(current_block.start, running_end)
                 name = method_node.name
                 if name.startswith("__"):
                     if name.endswith("__"):
@@ -278,6 +280,7 @@ class MethodsPartitions:
                     slf.protected.methods.append(current_block)
                 else:
                     slf.public.methods.append(current_block)
+            running_end = max(running_end, current_block.end)
         return slf
 
     def set_ranks(self, rules: OrderingRules) -> Self:

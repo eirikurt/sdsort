@@ -109,19 +109,26 @@ def _sort_methods_within_class(source_lines: list[str], class_def: ClassDef, con
     # TODO: recursively sort methods within nested classes?
 
     # Find methods
-    blocks = tuple(ClassBlock(class_def, source_lines, context).method_blocks)
+    class_block = ClassBlock(class_def, source_lines, context)
+    blocks = tuple(class_block.method_blocks)
 
     # Build dependency graph among methods
     dependencies = _find_dependencies(blocks, _method_call_target)
 
     # Re-order methods as needed
     sorted_blocks: list[Block] = []
-    for block in blocks:
-        _depth_first_sort(block, dependencies, sorted_blocks, [])
+    partitioned = context.ordering_rules is not None
+    if partitioned:
+        for partition in sorted(class_block.methods_partitions.iter(), key=lambda partition: partition.rank):
+            for block in partition.methods:
+                _depth_first_sort(block, dependencies, sorted_blocks, [], partition.methods)
+    else:
+        for block in blocks:
+            _depth_first_sort(block, dependencies, sorted_blocks, [])
 
     # Copy lines from the original source, shifting the methods around as needed
     return _rearrange_lines(
-        source_lines, blocks, sorted_blocks, start=find_start_of_class_body(class_def, source_lines)
+        source_lines, blocks, sorted_blocks, find_start_of_class_body(class_def, source_lines), partitioned
     )
 
 
@@ -158,6 +165,7 @@ def _depth_first_sort(
     dependencies: AcyclicGraph,
     sorted_blocks: list[Block],
     path: list[Block],
+    members: Collection[Block] | None = None,
 ):
     path.append(current_block)
 
@@ -167,16 +175,20 @@ def _depth_first_sort(
     except ValueError:
         pass
     sorted_blocks.append(current_block)
-
+    need_check_members = members is not None
     for dependency in dependencies.get_successors(current_block):
-        if dependency not in path:
-            _depth_first_sort(dependency, dependencies, sorted_blocks, path)
+        if dependency not in path and (not need_check_members or dependency in members):
+            _depth_first_sort(dependency, dependencies, sorted_blocks, path, members)
 
     path.pop()
 
 
 def _rearrange_lines(
-    source_lines: list[str], original_blocks: Collection[Block], sorted_blocks: list[Block], start: int = 0
+    source_lines: list[str],
+    original_blocks: Collection[Block],
+    sorted_blocks: list[Block],
+    start: int = 0,
+    partitioned: bool = False,
 ) -> list[str]:
     def lines_of(block: Block) -> list[str]:
         return source_lines[block.start : block.end]
@@ -185,23 +197,39 @@ def _rearrange_lines(
     pos = start
     sort_idx = 0
 
-    for orig_block in original_blocks:
-        result.extend(source_lines[pos : orig_block.start])  # filler is always emitted in original order
-        pos = orig_block.end
-
-        if sort_idx >= len(sorted_blocks) or orig_block != sorted_blocks[sort_idx]:
-            # The next sorted block hasn't reached its trigger slot yet; skip this slot.
-            # Blocks emitted early by the while-loop below also land here.
-            continue
-
-        result.extend(lines_of(sorted_blocks[sort_idx]))
-        sort_idx += 1
-
-        # A block that originally appeared before this slot should follow it immediately,
-        # because its own slot was already passed (and skipped) earlier in the walk.
-        while sort_idx < len(sorted_blocks) and sorted_blocks[sort_idx].start < orig_block.start:
+    if partitioned:
+        blocks_by_start: dict[int, Block] = {}
+        stop = start
+        for block in original_blocks:
+            blocks_by_start[block.start] = block
+            stop = max(stop, block.end)
+        while pos < stop:
+            block = blocks_by_start.get(pos)
+            if block is None:
+                result.append(source_lines[pos])
+                pos += 1
+                continue
             result.extend(lines_of(sorted_blocks[sort_idx]))
             sort_idx += 1
+            pos = block.end
+    else:
+        for orig_block in original_blocks:
+            result.extend(source_lines[pos : orig_block.start])  # filler is always emitted in original order
+            pos = orig_block.end
+
+            if sort_idx >= len(sorted_blocks) or orig_block != sorted_blocks[sort_idx]:
+                # The next sorted block hasn't reached its trigger slot yet; skip this slot.
+                # Blocks emitted early by the while-loop below also land here.
+                continue
+
+            result.extend(lines_of(sorted_blocks[sort_idx]))
+            sort_idx += 1
+
+            # A block that originally appeared before this slot should follow it immediately,
+            # because its own slot was already passed (and skipped) earlier in the walk.
+            while sort_idx < len(sorted_blocks) and sorted_blocks[sort_idx].start < orig_block.start:
+                result.extend(lines_of(sorted_blocks[sort_idx]))
+                sort_idx += 1
 
     if start == 0:
         # Include trailing content if we are doing the whole file
