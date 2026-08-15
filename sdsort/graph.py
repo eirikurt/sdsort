@@ -4,6 +4,8 @@ from collections import defaultdict
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from collections.abc import Generator
+
     from .block import Block
 
 
@@ -32,5 +34,5 @@ class AcyclicGraph:
             stack.extend(self._edges[node])
         return False
 
-    def get_successors(self, _from: Block):
+    def get_successors(self, _from: Block) -> Generator[Block, None, None]:
         yield from self._edges[_from]
