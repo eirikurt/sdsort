@@ -100,23 +100,13 @@ def test_all_cases(test_case: str):
     assert actual_output == expected_output
 
 
-def test_partitioned_methods(monkeypatch: pytest.MonkeyPatch):
-    def configured_context(_root: ast.Module, _path: Path | None = None) -> Context:
-        return Context(False, VisibilityRanks(dunder=1, private=3, protected=3, public=2), sort_by_name=True)
-
-    monkeypatch.setattr(
-        sort,
-        "gather_context",
-        configured_context,
-    )
-    _, actual_output = step_down_sort(TEST_CASES_DIR / "partitioned_methods.in.py")
-
-    assert actual_output == read_file(TEST_CASES_DIR / "partitioned_methods.out.py")
-
-
 @pytest.mark.parametrize(
     "case_name,ranks",
     [
+        (
+            "partitioned_methods",
+            VisibilityRanks(dunder=1, private=3, protected=3, public=2),
+        ),
         (
             "visibility_and_name_dependency_chain",
             VisibilityRanks(dunder=4, private=1, protected=3, public=2),
