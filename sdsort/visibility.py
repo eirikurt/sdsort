@@ -48,11 +48,6 @@ class VisibilityRanks(Generic[T]):
         default = max(rank for rank in ranks if rank is not None) + 1
         return VisibilityRanks[int](*(rank if rank is not None else default for rank in ranks))
 
-    def into_sorted(self: VisibilityRanks[int]) -> list[int]:
-        """De-duplicate and sort the ranks into a list of `int`, in ascending order.\\
-        Used before storing the output in a `ClassBlock`."""
-        return sorted({self.dunder, self.private, self.protected, self.public})
-
     def classify_for_block(self: VisibilityRanks[int], block: FunctionBlock, name: str):
         """Classify a `FunctionBlock` according to its name and assign it the corresponding rank."""
         if name.startswith("__"):

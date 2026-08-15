@@ -40,8 +40,6 @@ from .utils.ast import (
 if TYPE_CHECKING:
     from collections.abc import Collection, Generator, Iterable
 
-    from sdsort.context import VisibilityRanks
-
     from .context import Context
 
 
@@ -170,27 +168,32 @@ class StatementBlock(Block):
 class ClassBlock(Block):
     _nodes: list[ClassDef]
     _methods: list[FunctionBlock]
-    ranks: list[int]
 
     def __init__(self, node: ClassDef, source_lines: list[str], context: Context):
         super().__init__(node, context)
         self.start, self.end = determine_line_range(node, source_lines)
         method_nodes = get_method_nodes(node)
+        methods: list[FunctionBlock] = []
+        current_block: Block | None = None
         match context.visibility_ranks:
             case None:
-                methods: list[FunctionBlock] = []
-                current_block: Block | None = None
                 for method_node in method_nodes:
                     if current_block is None or not current_block.append(method_node):
                         current_block = FunctionBlock(method_node, source_lines, self._context)
                         methods.append(current_block)
                 self._methods = methods
-                self.ranks = []
                 resolve_overlapping_ranges(self._methods)
             case ranks:
-                self._methods, self.ranks = _methods_and_ranks_from_nodes(
-                    method_nodes, source_lines, context, ranks.into_ok_or_default()
-                )
+                ok_ranks = ranks.into_ok_or_default()
+                running_end = 0
+                for method_node in method_nodes:
+                    if current_block is None or not current_block.append(method_node):
+                        current_block = FunctionBlock(method_node, source_lines, context)
+                        current_block.start = max(current_block.start, running_end)
+                        methods.append(current_block)
+                        ok_ranks.classify_for_block(current_block, method_node.name)
+                    running_end = max(running_end, current_block.end)
+                self._methods = methods
 
     def append(self, node: AST) -> bool:
         return False
@@ -237,25 +240,6 @@ class ClassBlock(Block):
     @property
     def method_blocks(self) -> list[FunctionBlock]:
         return self._methods
-
-
-def _methods_and_ranks_from_nodes(
-    method_nodes: Iterable[FunctionDef | AsyncFunctionDef],
-    source_lines: list[str],
-    context: Context,
-    ranks: VisibilityRanks[int],
-) -> tuple[list[FunctionBlock], list[int]]:
-    methods: list[FunctionBlock] = []
-    current_block: Block | None = None
-    running_end = 0
-    for method_node in method_nodes:
-        if current_block is None or not current_block.append(method_node):
-            current_block = FunctionBlock(method_node, source_lines, context)
-            current_block.start = max(current_block.start, running_end)
-            methods.append(current_block)
-            ranks.classify_for_block(current_block, method_node.name)
-        running_end = max(running_end, current_block.end)
-    return (methods, ranks.into_sorted())
 
 
 def resolve_overlapping_ranges(blocks: Iterable[Block]) -> None:

@@ -131,23 +131,17 @@ def _sort_methods_within_class(source_lines: list[str], class_def: ClassDef, con
                 source_lines, blocks, sorted_blocks, find_start_of_class_body(class_def, source_lines)
             )
         case True, False:
-            for rank in class_block.ranks:
-                visitor = DepthFirstVisitor(dependencies, sorted_blocks)
-                for method in blocks:
-                    if method.rank == rank:
-                        visitor.sort_by_partition(method, rank)
+            visitor = DepthFirstVisitor(dependencies, sorted_blocks)
+            for method in sorted(blocks, key=lambda method: method.rank):
+                visitor.sort_by_partition(method, method.rank)
             return _rearrange_lines(
                 source_lines, blocks, sorted_blocks, find_start_of_class_body(class_def, source_lines)
             )
         case True, True:
-            for rank in class_block.ranks:
-                seen = set[FunctionBlock]()
-                visitor = DepthFirstVisitor(dependencies, sorted_blocks)
-                methods = sorted(
-                    (method for method in blocks if method.rank == rank), key=lambda method: method.name
-                )
-                for method in methods:
-                    visitor.sort_by_partition_and_name(method, rank, seen)
+            seen = set[FunctionBlock]()
+            visitor = DepthFirstVisitor(dependencies, sorted_blocks)
+            for method in sorted(blocks, key=lambda method: (method.rank, method.name)):
+                visitor.sort_by_partition_and_name(method, method.rank, seen)
             return _rearrange_lines_by_partition(
                 source_lines, blocks, sorted_blocks, find_start_of_class_body(class_def, source_lines)
             )
