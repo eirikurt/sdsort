@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import itertools
 import sys
 from abc import ABC, abstractmethod
 from ast import (
@@ -21,8 +20,7 @@ from ast import (
     stmt,
     walk,
 )
-from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Self
+from typing import TYPE_CHECKING
 
 if sys.version_info >= (3, 12):
     # PEP 695 `type X = ...` aliases (ast.TypeAlias) only exist on Python 3.12+.
@@ -40,7 +38,7 @@ from .utils.ast import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Collection, Generator, Iterable, Iterator
+    from collections.abc import Collection, Generator, Iterable
 
     from sdsort.context import VisibilityRanks
 
@@ -171,6 +169,8 @@ class StatementBlock(Block):
 
 class ClassBlock(Block):
     _nodes: list[ClassDef]
+    _methods: list[FunctionBlock]
+    ranks: list[int]
 
     def __init__(self, node: ClassDef, source_lines: list[str], context: Context):
         super().__init__(node, context)
@@ -184,10 +184,13 @@ class ClassBlock(Block):
                     if current_block is None or not current_block.append(method_node):
                         current_block = FunctionBlock(method_node, source_lines, self._context)
                         methods.append(current_block)
-                self._methods = MethodsPartitions(Partition(methods))
-                resolve_overlapping_ranges(self.method_blocks)
+                self._methods = methods
+                self.ranks = []
+                resolve_overlapping_ranges(self._methods)
             case ranks:
-                self._methods = MethodsPartitions.from_nodes(method_nodes, source_lines, context).set_ranks(ranks)
+                self._methods, self.ranks = _methods_and_ranks_from_nodes(
+                    method_nodes, source_lines, context, ranks.into_ok_or_default()
+                )
 
     def append(self, node: AST) -> bool:
         return False
@@ -232,73 +235,27 @@ class ClassBlock(Block):
         return [n.name for n in self._nodes]
 
     @property
-    def method_blocks(self) -> Iterator[FunctionBlock]:
-        return itertools.chain.from_iterable(p.methods for p in self._methods.iter())
-
-    @property
-    def methods_partitions(self) -> MethodsPartitions:
+    def method_blocks(self) -> list[FunctionBlock]:
         return self._methods
 
 
-@dataclass(slots=True)
-class Partition:
-    """A single partition of methods, with it's own rank and list of methods."""
-
-    methods: list[FunctionBlock] = field(default_factory=list)
-    rank: int = field(default=0)
-
-    def sort_by_name(self) -> list[FunctionBlock]:
-        self.methods.sort(key=lambda method: method.name)
-        return self.methods
-
-
-@dataclass(slots=True)
-class MethodsPartitions:
-    private: Partition = field(default_factory=Partition)
-    """All methods whose names start with a double underscore but do not end with a double underscore (e.g. `__my_method`)."""
-    protected: Partition = field(default_factory=Partition)
-    """All methods whose names start with a double underscore but do not end with a double underscore (e.g. `__my_method`)."""
-    dunder: Partition = field(default_factory=Partition)
-    """All methods whose names start and end with a double underscore (e.g. `__init__`)."""
-    public: Partition = field(default_factory=Partition)
-    """All methods whose names do not start with an underscore (e.g. `my_method`)."""
-
-    @classmethod
-    def from_nodes(
-        cls, method_nodes: Iterable[FunctionDef | AsyncFunctionDef], source_lines: list[str], context: Context
-    ) -> Self:
-        current_block: Block | None = None
-        running_end = 0
-        slf = cls()
-        for method_node in method_nodes:
-            if current_block is None or not current_block.append(method_node):
-                current_block = FunctionBlock(method_node, source_lines, context)
-                current_block.start = max(current_block.start, running_end)
-                name = method_node.name
-                if name.startswith("__"):
-                    if name.endswith("__"):
-                        slf.dunder.methods.append(current_block)
-                    else:
-                        slf.private.methods.append(current_block)
-                elif name.startswith("_"):
-                    slf.protected.methods.append(current_block)
-                else:
-                    slf.public.methods.append(current_block)
-            running_end = max(running_end, current_block.end)
-        return slf
-
-    def set_ranks(self, ranks: VisibilityRanks) -> Self:
-        self.dunder.rank = ranks.dunder
-        self.private.rank = ranks.private
-        self.protected.rank = ranks.protected
-        self.public.rank = ranks.public
-        return self
-
-    def sort_by_rank(self) -> list[Partition]:
-        return sorted(self.iter(), key=lambda partition: partition.rank)
-
-    def iter(self) -> Iterator[Partition]:
-        return iter((self.dunder, self.private, self.protected, self.public))
+def _methods_and_ranks_from_nodes(
+    method_nodes: Iterable[FunctionDef | AsyncFunctionDef],
+    source_lines: list[str],
+    context: Context,
+    ranks: VisibilityRanks[int],
+) -> tuple[list[FunctionBlock], list[int]]:
+    methods: list[FunctionBlock] = []
+    current_block: Block | None = None
+    running_end = 0
+    for method_node in method_nodes:
+        if current_block is None or not current_block.append(method_node):
+            current_block = FunctionBlock(method_node, source_lines, context)
+            current_block.start = max(current_block.start, running_end)
+            methods.append(current_block)
+            ranks.classify_for_block(current_block, method_node.name)
+        running_end = max(running_end, current_block.end)
+    return (methods, ranks.into_sorted())
 
 
 def resolve_overlapping_ranges(blocks: Iterable[Block]) -> None:
@@ -316,6 +273,7 @@ class FunctionBlock(Block):
         self.start, self.end = determine_line_range(node, source_lines)
         self._source_lines = source_lines
         self.name = node.name
+        self.rank = 0
 
     def append(self, node: AST) -> bool:
         if isinstance(node, (FunctionDef, AsyncFunctionDef)) and node.name == self._nodes[0].name:

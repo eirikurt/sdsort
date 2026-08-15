@@ -7,7 +7,7 @@ from io import BytesIO
 from itertools import takewhile
 from pathlib import Path
 from tokenize import COMMENT, tokenize
-from typing import TYPE_CHECKING, Literal, TypeAlias
+from typing import TYPE_CHECKING, Generic, Literal, TypeAlias, TypeVar
 
 from .block import Block, ClassBlock, FunctionBlock, block_for, resolve_overlapping_ranges
 from .context import Context, gather_context
@@ -26,6 +26,9 @@ if TYPE_CHECKING:
 ResultType: TypeAlias = (
     tuple[Literal["sorted"], str] | tuple[Literal["skipped"], None] | tuple[Literal["unchanged"], None]
 )
+
+
+B = TypeVar("B", bound=Block)
 
 
 def step_down_sort(python_file_path: str | Path) -> ResultType:
@@ -128,31 +131,35 @@ def _sort_methods_within_class(source_lines: list[str], class_def: ClassDef, con
                 source_lines, blocks, sorted_blocks, find_start_of_class_body(class_def, source_lines)
             )
         case True, False:
-            for partition in class_block.methods_partitions.sort_by_rank():
+            for rank in class_block.ranks:
                 visitor = DepthFirstVisitor(dependencies, sorted_blocks)
-                for method in partition.methods:
-                    visitor.sort_by_partition(method, partition.methods)
+                for method in blocks:
+                    if method.rank == rank:
+                        visitor.sort_by_partition(method, rank)
             return _rearrange_lines(
                 source_lines, blocks, sorted_blocks, find_start_of_class_body(class_def, source_lines)
             )
         case True, True:
-            for partition in class_block.methods_partitions.sort_by_rank():
-                seen: set[Block] = set()
+            for rank in class_block.ranks:
+                seen = set[FunctionBlock]()
                 visitor = DepthFirstVisitor(dependencies, sorted_blocks)
-                for method in partition.sort_by_name():
-                    visitor.sort_by_partition_and_name(method, partition.methods, seen)
+                methods = sorted(
+                    (method for method in blocks if method.rank == rank), key=lambda method: method.name
+                )
+                for method in methods:
+                    visitor.sort_by_partition_and_name(method, rank, seen)
             return _rearrange_lines_by_partition(
                 source_lines, blocks, sorted_blocks, find_start_of_class_body(class_def, source_lines)
             )
 
 
 def _find_dependencies(
-    blocks: Collection[Block],
+    blocks: Collection[B],
     get_call_target: Callable[[Call], str | None],
-):
-    dependencies = AcyclicGraph()
+) -> AcyclicGraph[B]:
+    dependencies = AcyclicGraph[B]()
 
-    blocks_by_name: dict[str, list[Block]] = defaultdict(list)
+    blocks_by_name: dict[str, list[B]] = defaultdict(list)
     for block in blocks:
         for name in block.names:
             blocks_by_name[name].append(block)
@@ -175,43 +182,45 @@ def _find_dependencies(
 
 
 @dataclass(slots=True)
-class DepthFirstVisitor:
-    dependencies: AcyclicGraph
+class DepthFirstVisitor(Generic[B]):
+    dependencies: AcyclicGraph[B]
     sorted_blocks: list[Block]
     path: list[Block] = field(default_factory=list, init=False)
 
-    def sort_top_block(self, block: Block) -> None:
+    def sort_top_block(self, block: B) -> None:
         self._move_current_block(block)
-        for dependency in self._iter_successors_if(lambda b: b not in self.path, block):
+        for dependency in self._iter_successors_if(lambda s: s not in self.path, block):
             self.sort_top_block(dependency)
 
-    def sort(self, block: Block) -> None:
+    def sort(self, block: B) -> None:
         self.path.append(block)
         self._move_current_block(block)
-        for dependency in self._iter_successors_if(lambda b: b not in self.path, block):
+        for dependency in self._iter_successors_if(lambda s: s not in self.path, block):
             self.sort(dependency)
         self.path.pop()
 
-    def sort_by_partition(self, block: Block, methods: Collection[FunctionBlock]) -> None:
+    def sort_by_partition(self: FnVisitor, block: FunctionBlock, rank: int) -> None:
         self.path.append(block)
         self._move_current_block(block)
-        for dependency in self._iter_successors_if(lambda b: b not in self.path and b in methods, block):
-            self.sort_by_partition(dependency, methods)
+        for dependency in self._iter_successors_if(lambda s: s not in self.path and s.rank == rank, block):
+            self.sort_by_partition(dependency, rank)
         self.path.pop()
 
-    def sort_by_partition_and_name(self, block: Block, methods: Collection[FunctionBlock], seen: set[Block]):
+    def sort_by_partition_and_name(
+        self: FnVisitor, block: FunctionBlock, rank: int, seen: set[FunctionBlock]
+    ) -> None:
         if block in seen:
             return
         seen.add(block)
         self.path.append(block)
         self._move_current_block(block)
         for dependency in self._iter_successors_if(
-            lambda b: b not in self.path and b in methods and b not in seen, block
+            lambda s: s not in self.path and s.rank == rank and s not in seen, block
         ):
-            self.sort_by_partition_and_name(dependency, methods, seen)
+            self.sort_by_partition_and_name(dependency, rank, seen)
         self.path.pop()
 
-    def _iter_successors_if(self, fn: Callable[[Block], object], block: Block) -> filter[Block]:
+    def _iter_successors_if(self, fn: Callable[[B], object], block: B) -> filter[B]:
         return filter(fn, self.dependencies.get_successors(block))
 
     def _move_current_block(self, block: Block) -> None:
@@ -221,6 +230,9 @@ class DepthFirstVisitor:
         except ValueError:
             pass
         self.sorted_blocks.append(block)
+
+
+FnVisitor: TypeAlias = DepthFirstVisitor[FunctionBlock]
 
 
 def _rearrange_lines(
