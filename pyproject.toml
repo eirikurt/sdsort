@@ -50,6 +50,15 @@ typeCheckingMode = "standard"
 include = ["sdsort", "test"]
 exclude = ["test/cases", "test/repos"]
 
+# Opted in from basedpyright's extra rules: the codebase is clean under these, and
+# they catch annotations that silently decay into Any / Unknown.
+reportUnknownParameterType = "error"
+reportUnknownVariableType = "error"
+reportUnknownMemberType = "error"
+reportUnknownArgumentType = "error"
+reportUnknownLambdaType = "error"
+reportMissingParameterType = "error"
+
 [tool.uv]
 required-version = ">=0.11.3,<0.12"
 

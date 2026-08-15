@@ -44,7 +44,7 @@ def _find_required_top_level_blanks(ast: Module, lines: list[str]):
     return required_blanks
 
 
-def _find_required_class_method_blanks(ast, lines):
+def _find_required_class_method_blanks(ast: Module, lines: list[str]):
     required_blanks: dict[int, int] = {}
     for class_node in get_class_nodes(ast):
         seen_methods = set[str]()

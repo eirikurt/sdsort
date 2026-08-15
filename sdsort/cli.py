@@ -63,7 +63,7 @@ def main(paths: tuple[str, ...], check: bool, jobs: int):
 
 
 def _expand_file_paths(paths: tuple[str, ...]) -> Iterable[str]:
-    file_paths = []
+    file_paths: list[str] = []
     for path in paths:
         if os.path.isdir(path):
             file_paths.extend(glob(os.path.join(path, "**/*.py"), recursive=True))

@@ -13,7 +13,7 @@ class Timer:
         self._start = time.perf_counter()
         return self
 
-    def __exit__(self, *args):
+    def __exit__(self, *args: object) -> None:
         self._end = time.perf_counter()
 
     @property

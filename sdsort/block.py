@@ -253,7 +253,7 @@ class FunctionBlock(Block):
 
     def find_calls(self) -> Generator[Call, None, None]:
         for root in self._nodes:
-            subtrees = [*root.body, root.args, *([] if root.returns is None else [root.returns])]
+            subtrees: list[AST] = [*root.body, root.args, *([] if root.returns is None else [root.returns])]
             for subtree in subtrees:
                 for node in walk(subtree):
                     if isinstance(node, Call):
