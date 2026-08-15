@@ -2,14 +2,18 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from typing import Self
 
 
-@dataclass
+@dataclass(slots=True)
 class Timer:
     _start: float = field(default=0.0, repr=False)
     _end: float = field(default=0.0, repr=False)
 
-    def __enter__(self):
+    def __enter__(self) -> Self:
         self._start = time.perf_counter()
         return self
 

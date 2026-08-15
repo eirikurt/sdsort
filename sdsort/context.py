@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
-@dataclass
+@dataclass(slots=True)
 class Context:
     deferred_annotations: bool
 

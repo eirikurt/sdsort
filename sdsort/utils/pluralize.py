@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 
-def pluralize(count: int, word: str):
+def pluralize(count: int, word: str) -> str:
     if count != 1:
         word += "s"
     return f"{count} {word}"

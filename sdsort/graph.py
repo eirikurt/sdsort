@@ -10,6 +10,8 @@ if TYPE_CHECKING:
 
 
 class AcyclicGraph:
+    __slots__ = ("_edges",)
+
     def __init__(self) -> None:
         self._edges: defaultdict[Block, list[Block]] = defaultdict(list)
 

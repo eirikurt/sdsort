@@ -149,7 +149,7 @@ def _describe_failure(error: Exception) -> str:
     return str(error)
 
 
-@dataclass
+@dataclass(slots=True)
 class Results:
     modified_files: list[str] = field(default_factory=list)
     skipped_files: list[str] = field(default_factory=list)
