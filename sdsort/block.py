@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import sys
 from abc import ABC, abstractmethod
 from ast import (
@@ -18,8 +20,7 @@ from ast import (
     stmt,
     walk,
 )
-from collections.abc import Collection
-from typing import Generator, Union
+from typing import TYPE_CHECKING
 
 if sys.version_info >= (3, 12):
     # PEP 695 `type X = ...` aliases (ast.TypeAlias) only exist on Python 3.12+.
@@ -29,13 +30,17 @@ if sys.version_info >= (3, 12):
 else:
     _TYPE_ALIAS_TYPES: tuple[type, ...] = ()
 
-from .context import Context
 from .utils.ast import (
     Function,
     determine_line_range,
     find_first_line,
     get_method_nodes,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Collection, Generator
+
+    from .context import Context
 
 
 def block_for(node: stmt, source_lines: list[str], context: Context):
@@ -78,9 +83,9 @@ class Block(ABC):
 
 
 class ImportBlock(Block):
-    _nodes: list[Union[Import, ImportFrom]]
+    _nodes: list[Import | ImportFrom]
 
-    def __init__(self, node: Union[Import, ImportFrom], source_lines: list[str], context: Context):
+    def __init__(self, node: Import | ImportFrom, source_lines: list[str], context: Context):
         super().__init__(node, context)
         self.start = find_first_line(node, source_lines)
         self.end = node.end_lineno or node.lineno
@@ -168,7 +173,7 @@ class ClassBlock(Block):
         self.start, self.end = determine_line_range(node, source_lines)
         method_nodes = get_method_nodes(node)
         self._methods: list[FunctionBlock] = []
-        current_block: Union[Block, None] = None
+        current_block: Block | None = None
         for method_node in method_nodes:
             if current_block is None or not current_block.append(method_node):
                 current_block = FunctionBlock(method_node, source_lines, self._context)
