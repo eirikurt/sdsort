@@ -14,7 +14,12 @@ if TYPE_CHECKING:
 @dataclass
 class Context:
     deferred_annotations: bool
-    ordering_rules: OrderingRules | None = None
+    visibility_ranks: VisibilityRanks | None = None
+    sort_by_name: bool = False
+
+    @property
+    def sort_by_visibility(self) -> bool:
+        return self.visibility_ranks is not None
 
 
 def gather_context(root_node: Module, file_path: Path | None = None) -> Context:
@@ -31,7 +36,7 @@ def gather_context(root_node: Module, file_path: Path | None = None) -> Context:
 
 
 @dataclass(slots=True)
-class OrderingRules:
+class VisibilityRanks:
     dunder: int
     private: int
     protected: int

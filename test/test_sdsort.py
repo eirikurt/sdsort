@@ -10,7 +10,7 @@ from click.testing import CliRunner
 
 from sdsort import cli, main, sort, step_down_sort
 from sdsort.cli import _MAX_WORKERS, _MIN_FILES_FOR_PARALLELISM, _worker_count
-from sdsort.context import Context, OrderingRules, _targets_python314_or_newer
+from sdsort.context import Context, VisibilityRanks, _targets_python314_or_newer
 from sdsort.utils.file import read_file
 
 TEST_CASES_DIR = Path("test", "cases")
@@ -102,7 +102,7 @@ def test_all_cases(test_case: str):
 
 def test_partitioned_methods(monkeypatch: pytest.MonkeyPatch):
     def configured_context(_root: ast.Module, _path: Path | None = None) -> Context:
-        return Context(False, OrderingRules(dunder=1, private=3, protected=3, public=2))
+        return Context(False, VisibilityRanks(dunder=1, private=3, protected=3, public=2), sort_by_name=True)
 
     monkeypatch.setattr(
         sort,

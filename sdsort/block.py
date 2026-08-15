@@ -42,7 +42,7 @@ from .utils.ast import (
 if TYPE_CHECKING:
     from collections.abc import Collection, Generator, Iterable, Iterator
 
-    from sdsort.context import OrderingRules
+    from sdsort.context import VisibilityRanks
 
     from .context import Context
 
@@ -176,7 +176,7 @@ class ClassBlock(Block):
         super().__init__(node, context)
         self.start, self.end = determine_line_range(node, source_lines)
         method_nodes = get_method_nodes(node)
-        match context.ordering_rules:
+        match context.visibility_ranks:
             case None:
                 methods: list[FunctionBlock] = []
                 current_block: Block | None = None
@@ -186,8 +186,8 @@ class ClassBlock(Block):
                         methods.append(current_block)
                 self._methods = MethodsPartitions(Partition(methods))
                 resolve_overlapping_ranges(self.method_blocks)
-            case rules:
-                self._methods = MethodsPartitions.from_nodes(method_nodes, source_lines, context).set_ranks(rules)
+            case ranks:
+                self._methods = MethodsPartitions.from_nodes(method_nodes, source_lines, context).set_ranks(ranks)
 
     def append(self, node: AST) -> bool:
         return False
@@ -247,6 +247,10 @@ class Partition:
     methods: list[FunctionBlock] = field(default_factory=list)
     rank: int = field(default=0)
 
+    def sort_by_name(self) -> list[FunctionBlock]:
+        self.methods.sort(key=lambda method: method.name)
+        return self.methods
+
 
 @dataclass(slots=True)
 class MethodsPartitions:
@@ -283,12 +287,15 @@ class MethodsPartitions:
             running_end = max(running_end, current_block.end)
         return slf
 
-    def set_ranks(self, rules: OrderingRules) -> Self:
-        self.dunder.rank = rules.dunder
-        self.private.rank = rules.private
-        self.protected.rank = rules.protected
-        self.public.rank = rules.public
+    def set_ranks(self, ranks: VisibilityRanks) -> Self:
+        self.dunder.rank = ranks.dunder
+        self.private.rank = ranks.private
+        self.protected.rank = ranks.protected
+        self.public.rank = ranks.public
         return self
+
+    def sort_by_rank(self) -> list[Partition]:
+        return sorted(self.iter(), key=lambda partition: partition.rank)
 
     def iter(self) -> Iterator[Partition]:
         return iter((self.dunder, self.private, self.protected, self.public))
@@ -308,6 +315,7 @@ class FunctionBlock(Block):
         super().__init__(node, context)
         self.start, self.end = determine_line_range(node, source_lines)
         self._source_lines = source_lines
+        self.name = node.name
 
     def append(self, node: AST) -> bool:
         if isinstance(node, (FunctionDef, AsyncFunctionDef)) and node.name == self._nodes[0].name:
