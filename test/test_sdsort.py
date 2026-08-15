@@ -15,6 +15,7 @@ from sdsort.context import Context, VisibilityRanks, _targets_python314_or_newer
 from sdsort.utils.file import read_file
 
 TEST_CASES_DIR = Path("test", "cases")
+TOML_CASES_DIR = Path("test", "toml_cases")
 UNPARSEABLE_SOURCE = "def f(:\n"
 
 
@@ -180,6 +181,16 @@ def test_visibility_and_name_cases(
     _, actual_output = step_down_sort(TEST_CASES_DIR / f"{case_name}.in.py")
 
     assert actual_output == read_file(TEST_CASES_DIR / f"{expected_case_name}.out.py")
+
+
+@pytest.mark.parametrize("case_name", ["full_ranks", "partial_ranks", "partial_ranks_by_name"])
+def test_toml_configuration_cases(case_name: str):
+    case_dir = TOML_CASES_DIR / case_name
+
+    status, actual_output = step_down_sort(case_dir / "input.py")
+
+    assert status == "sorted"
+    assert actual_output == read_file(case_dir / "expected.py")
 
 
 @pytest.mark.skipif(sys.version_info < (3, 12), reason="`type` alias statement requires Python 3.12+")

@@ -1,0 +1,4 @@
+[tool.sdsort]
+dunder = 1
+private = 2
+sort-by-name = true
