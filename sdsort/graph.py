@@ -1,19 +1,21 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Generic, TypeVar
+
+from .block import Block
 
 if TYPE_CHECKING:
     from collections.abc import Generator
 
-    from .block import Block
+B = TypeVar("B", bound=Block)
 
 
-class AcyclicGraph:
+class AcyclicGraph(Generic[B]):
     def __init__(self) -> None:
-        self._edges: defaultdict[Block, list[Block]] = defaultdict(list)
+        self._edges: defaultdict[B, list[B]] = defaultdict(list)
 
-    def add_edge(self, *, _from: Block, to: Block) -> bool:
+    def add_edge(self, *, _from: B, to: B) -> bool:
         if to in self._edges[_from]:
             return False
         if _from == to or self._is_reachable(_from, start=to):
@@ -21,8 +23,8 @@ class AcyclicGraph:
         self._edges[_from].append(to)
         return True
 
-    def _is_reachable(self, target: Block, *, start: Block) -> bool:
-        visited: set[Block] = set()
+    def _is_reachable(self, target: B, *, start: B) -> bool:
+        visited = set[B]()
         stack = [start]
         while stack:
             node = stack.pop()
@@ -34,5 +36,5 @@ class AcyclicGraph:
             stack.extend(self._edges[node])
         return False
 
-    def get_successors(self, _from: Block) -> Generator[Block, None, None]:
+    def get_successors(self, _from: B) -> Generator[B, None, None]:
         yield from self._edges[_from]
