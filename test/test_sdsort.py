@@ -126,11 +126,15 @@ def test_partitioned_methods(monkeypatch: pytest.MonkeyPatch):
             VisibilityRanks(dunder=4, private=3, protected=2, public=1),
         ),
         (
-            "nested_class_visibility_and_name",
+            "async_methods_with_visibility_and_name",
             VisibilityRanks(dunder=1, private=2, protected=3, public=4),
         ),
         (
             "overloads_with_visibility_and_name",
+            VisibilityRanks(dunder=1, private=2, protected=3, public=4),
+        ),
+        (
+            "visibility_and_name_recursive_methods",
             VisibilityRanks(dunder=1, private=2, protected=3, public=4),
         ),
     ],
