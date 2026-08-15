@@ -1,6 +1,10 @@
-from collections import defaultdict
+from __future__ import annotations
 
-from .block import Block
+from collections import defaultdict
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .block import Block
 
 
 class AcyclicGraph:

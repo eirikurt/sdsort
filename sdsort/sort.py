@@ -1,11 +1,12 @@
+from __future__ import annotations
+
 from ast import Attribute, Call, ClassDef, Module, Name, parse
 from collections import defaultdict
-from collections.abc import Collection
 from io import BytesIO
 from itertools import takewhile
 from pathlib import Path
 from tokenize import COMMENT, tokenize
-from typing import Callable, Literal, Optional, Union
+from typing import TYPE_CHECKING, Literal, TypeAlias
 
 from .block import Block, ClassBlock, FunctionBlock, block_for, resolve_overlapping_ranges
 from .context import Context, gather_context
@@ -18,9 +19,12 @@ from .utils.ast import (
 )
 from .utils.file import read_file, split_lines
 
-ResultType = Union[
-    tuple[Literal["sorted"], str], tuple[Literal["skipped"], None], tuple[Literal["unchanged"], None]
-]
+if TYPE_CHECKING:
+    from collections.abc import Callable, Collection
+
+ResultType: TypeAlias = (
+    tuple[Literal["sorted"], str] | tuple[Literal["skipped"], None] | tuple[Literal["unchanged"], None]
+)
 
 
 def step_down_sort(python_file_path: str | Path) -> ResultType:
@@ -91,7 +95,7 @@ def _sort_top_level_blocks(source_lines: list[str], syntax_tree: Module, context
 
 def _find_top_level_blocks(syntax_tree: Module, source_lines: list[str], context: Context):
     blocks: list[Block] = []
-    current_block: Union[Block, None] = None
+    current_block: Block | None = None
     for node in syntax_tree.body:
         if current_block is None or not current_block.append(node):
             current_block = block_for(node, source_lines, context)
@@ -123,7 +127,7 @@ def _sort_methods_within_class(source_lines: list[str], class_def: ClassDef, con
 
 def _find_dependencies(
     blocks: Collection[Block],
-    get_call_target: Callable[[Call], Optional[str]],
+    get_call_target: Callable[[Call], str | None],
 ):
     dependencies = AcyclicGraph()
 
@@ -228,7 +232,7 @@ def _ensure_number_of_leading_blank_lines_remains_unchanged(
     return rearranged_lines
 
 
-def _method_call_target(node: Call) -> Optional[str]:
+def _method_call_target(node: Call) -> str | None:
     """Extract target name from self.method() calls."""
     return (
         node.func.attr
@@ -237,6 +241,6 @@ def _method_call_target(node: Call) -> Optional[str]:
     )
 
 
-def _function_call_target(node: Call) -> Optional[str]:
+def _function_call_target(node: Call) -> str | None:
     """Extract target name from direct function() calls."""
     return node.func.id if isinstance(node.func, Name) else None

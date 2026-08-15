@@ -1,9 +1,11 @@
+from __future__ import annotations
+
 from ast import AsyncFunctionDef, ClassDef, FunctionDef, Module, stmt
 from itertools import takewhile
-from typing import Union
+from typing import TypeAlias
 
-Function = Union[FunctionDef, AsyncFunctionDef]
-ClassOrFunction = Union[ClassDef, Function]
+Function: TypeAlias = FunctionDef | AsyncFunctionDef
+ClassOrFunction: TypeAlias = ClassDef | Function
 
 
 def find_start_of_class_body(cls: ClassDef, source_lines: list[str]):

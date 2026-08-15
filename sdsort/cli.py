@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 import sys
 from concurrent.futures import ProcessPoolExecutor
@@ -5,13 +7,16 @@ from dataclasses import dataclass, field
 from functools import partial
 from glob import glob
 from tokenize import TokenError
-from typing import Iterable, Literal, Union
+from typing import TYPE_CHECKING, Literal, TypeAlias
 
 import click
 
 from .sort import step_down_sort
 from .utils.pluralize import pluralize
 from .utils.timer import Timer
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
 
 # TODO: switch to pathlib
 
@@ -20,10 +25,9 @@ _MAX_WORKERS = 64
 
 _UNPARSEABLE = (SyntaxError, TokenError, UnicodeDecodeError, OSError)
 
-FileOutcome = Union[
-    tuple[Literal["sorted", "skipped", "unchanged"], None],
-    tuple[Literal["unparseable"], str],
-]
+FileOutcome: TypeAlias = (
+    tuple[Literal["sorted", "skipped", "unchanged"], None] | tuple[Literal["unparseable"], str]
+)
 
 
 @click.command()

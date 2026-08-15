@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from ast import AsyncFunctionDef, ClassDef, FunctionDef, Module, parse, stmt
 
 from .utils.ast import find_first_line, get_class_nodes, get_method_nodes, is_blank

@@ -1,9 +1,14 @@
+from __future__ import annotations
+
 import tomllib
 from ast import ImportFrom, Module
 from dataclasses import dataclass
 from functools import lru_cache
 from itertools import takewhile
-from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 @dataclass
