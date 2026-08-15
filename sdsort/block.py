@@ -54,11 +54,13 @@ def block_for(node: stmt, source_lines: list[str], context: Context):
 
 
 class Block(ABC):
-    def __init__(self, node: AST, context: Context):
+    __slots__ = ("_nodes", "_context", "start", "end")
+
+    def __init__(self, node: AST, context: Context) -> None:
         self._nodes = [node]
-        self._context = context
-        self.start = -1
-        self.end = -1
+        self._context: Context = context
+        self.start: int = -1
+        self.end: int = -1
 
     @abstractmethod
     def append(self, node: AST) -> bool:
@@ -84,6 +86,7 @@ class Block(ABC):
 
 class ImportBlock(Block):
     _nodes: list[Import | ImportFrom]
+    __slots__ = ()
 
     def __init__(self, node: Import | ImportFrom, source_lines: list[str], context: Context):
         super().__init__(node, context)
@@ -111,6 +114,7 @@ class ImportBlock(Block):
 class StatementBlock(Block):
     _nodes: list[stmt]
     _names: set[str]
+    __slots__ = ("_names",)
 
     def __init__(self, node: stmt, source_lines: list[str], context: Context):
         super().__init__(node, context)
@@ -167,6 +171,7 @@ class StatementBlock(Block):
 
 class ClassBlock(Block):
     _nodes: list[ClassDef]
+    __slots__ = ("_methods",)
 
     def __init__(self, node: ClassDef, source_lines: list[str], context: Context):
         super().__init__(node, context)
@@ -236,6 +241,7 @@ def resolve_overlapping_ranges(blocks: Collection[Block]) -> None:
 
 class FunctionBlock(Block):
     _nodes: list[Function]
+    __slots__ = ("_source_lines",)
 
     def __init__(self, node: Function, source_lines: list[str], context: Context):
         super().__init__(node, context)
