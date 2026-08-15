@@ -30,7 +30,7 @@ Everything runs through `make`. Before pushing, make sure the full check gate
 passes:
 
 ```bash
-make rpt          # Runs, in order: ruff → basedpyright → test
+make rtt          # Runs, in order: ruff → typecheck → test
 ```
 
 The individual steps are also available:

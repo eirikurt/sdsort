@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: ruff typecheck test testx case rpt
+.PHONY: ruff typecheck test testx case rtt rpt
 
 ruff:
 	uv run ruff check --fix
@@ -31,4 +31,7 @@ ifeq ($(strip $(CASE)),)
 endif
 	uv run pytest -v -k "$(CASE)"
 
-rpt: ruff typecheck test
+rtt: ruff typecheck test
+
+# Alias for `rtt`, from when the typecheck step was named after pyright.
+rpt: rtt

@@ -9,7 +9,7 @@ sdsort is a Python CLI tool that sorts both **class methods** and **top-level fu
 ## Commands
 
 ```bash
-make rpt          # Run all checks: ruff → basedpyright → test
+make rtt          # Run all checks: ruff → typecheck → test
 make test         # Run pytest suite
 make ruff         # Format and sort imports
 make typecheck    # Type check
