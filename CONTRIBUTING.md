@@ -87,10 +87,8 @@ tool handles, and that's intentional.
 
 - **Formatting & imports:** handled by [ruff](https://docs.astral.sh/ruff/).
   Run `make ruff` before committing.
-- **Type checking:** [basedpyright](https://docs.basedpyright.com/) in standard
-  mode. `make typecheck` must be clean. basedpyright is a fork of pyright, so
-  the inference is identical; it's used here because the same binary backs both
-  the CLI gate and the editor LSP, which keeps the two from drifting apart.
+- **Type checking:** [basedpyright](https://docs.basedpyright.com/).
+  `make typecheck` must be clean.
 - **Line length:** 115.
 
 `test/cases/` is intentionally excluded from both ruff and basedpyright — those
