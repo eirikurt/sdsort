@@ -8,9 +8,9 @@ from pathlib import Path
 import pytest
 from click.testing import CliRunner
 
-from sdsort import cli, main, step_down_sort
+from sdsort import cli, main, sort, step_down_sort
 from sdsort.cli import _MAX_WORKERS, _MIN_FILES_FOR_PARALLELISM, _worker_count
-from sdsort.context import _targets_python314_or_newer
+from sdsort.context import Context, OrderingRules, _targets_python314_or_newer
 from sdsort.utils.file import read_file
 
 TEST_CASES_DIR = Path("test", "cases")
@@ -98,6 +98,20 @@ def test_all_cases(test_case: str):
     if actual_output is None:
         actual_output = read_file(input_file_path)
     assert actual_output == expected_output
+
+
+def test_partitioned_methods(monkeypatch: pytest.MonkeyPatch):
+    def configured_context(_root: ast.Module, _path: Path | None = None) -> Context:
+        return Context(False, OrderingRules(dunder=1, private=3, protected=3, public=2))
+
+    monkeypatch.setattr(
+        sort,
+        "gather_context",
+        configured_context,
+    )
+    _, actual_output = step_down_sort(TEST_CASES_DIR / "partitioned_methods.in.py")
+
+    assert actual_output == read_file(TEST_CASES_DIR / "partitioned_methods.out.py")
 
 
 @pytest.mark.skipif(sys.version_info < (3, 12), reason="`type` alias statement requires Python 3.12+")
