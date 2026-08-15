@@ -9,10 +9,10 @@ sdsort is a Python CLI tool that sorts both **class methods** and **top-level fu
 ## Commands
 
 ```bash
-make rpt          # Run all checks: ruff → pyright → test
+make rpt          # Run all checks: ruff → basedpyright → test
 make test         # Run pytest suite
 make ruff         # Format and sort imports
-make pyright      # Type check
+make typecheck    # Type check
 
 # Run a single test case (matches by name via pytest -k)
 make case single_class
@@ -53,4 +53,4 @@ The test runner compares `step_down_sort()` output against the `.out.py` content
 ## Configuration
 
 - Python ≥3.11, line length 115, strict type checking
-- `test/cases/` is excluded from ruff and pyright (intentional test fixtures)
+- `test/cases/` is excluded from ruff and basedpyright (intentional test fixtures)

@@ -1,13 +1,13 @@
 SHELL := /bin/bash
 
-.PHONY: ruff pyright test testx case rpt
+.PHONY: ruff typecheck test testx case rpt
 
 ruff:
 	uv run ruff check --fix
 	uv run ruff format
 
-pyright:
-	uv run pyright
+typecheck:
+	uv run basedpyright
 
 test:
 	uv run pytest
@@ -31,4 +31,4 @@ ifeq ($(strip $(CASE)),)
 endif
 	uv run pytest -v -k "$(CASE)"
 
-rpt: ruff pyright test
+rpt: ruff typecheck test

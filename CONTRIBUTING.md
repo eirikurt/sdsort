@@ -30,7 +30,7 @@ Everything runs through `make`. Before pushing, make sure the full check gate
 passes:
 
 ```bash
-make rpt          # Runs, in order: ruff → pyright → test
+make rpt          # Runs, in order: ruff → basedpyright → test
 ```
 
 The individual steps are also available:
@@ -38,7 +38,7 @@ The individual steps are also available:
 ```bash
 make test         # Run the pytest suite
 make ruff         # Format code and sort imports
-make pyright      # Type check
+make typecheck    # Type check
 make testx        # Stop on first failure and drop into pdb (handy while debugging)
 ```
 
@@ -87,11 +87,13 @@ tool handles, and that's intentional.
 
 - **Formatting & imports:** handled by [ruff](https://docs.astral.sh/ruff/).
   Run `make ruff` before committing.
-- **Type checking:** [pyright](https://microsoft.github.io/pyright/) in strict
-  mode. `make pyright` must be clean.
+- **Type checking:** [basedpyright](https://docs.basedpyright.com/) in standard
+  mode. `make typecheck` must be clean. basedpyright is a fork of pyright, so
+  the inference is identical; it's used here because the same binary backs both
+  the CLI gate and the editor LSP, which keeps the two from drifting apart.
 - **Line length:** 115.
 
-`test/cases/` is intentionally excluded from both ruff and pyright — those
+`test/cases/` is intentionally excluded from both ruff and basedpyright — those
 files are fixtures and are meant to contain deliberately unsorted (and
 sometimes unusual) code. Don't reformat them.
 
