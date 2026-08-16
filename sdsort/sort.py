@@ -119,34 +119,27 @@ def _sort_methods_within_class(source_lines: list[str], class_def: ClassDef, con
     dependencies = _find_dependencies(blocks, _method_call_target)
 
     # Re-order methods as needed
-    sorted_blocks: list[Block] = []
+    sorted_blocks: list[FunctionBlock] = []
     visitor = DepthFirstVisitor(dependencies, sorted_blocks)
+    start = find_start_of_class_body(class_def, source_lines)
     match context.sort_by_visibility, context.sort_by_name:
         case False, False:
             for block in blocks:
                 visitor.sort(block)
-            return _rearrange_lines(
-                source_lines, blocks, sorted_blocks, find_start_of_class_body(class_def, source_lines)
-            )
+            return _rearrange_lines(source_lines, blocks, sorted_blocks, start)
         case False, True:
             for method in sorted(blocks, key=lambda method: method.name):
                 visitor.sort(method)
-            return _rearrange_lines(
-                source_lines, blocks, sorted_blocks, find_start_of_class_body(class_def, source_lines)
-            )
+            return _rearrange_lines(source_lines, blocks, sorted_blocks, start)
         case True, False:
             for method in sorted(blocks, key=lambda method: method.rank):
                 visitor.sort_by_partition(method, method.rank)
-            return _rearrange_lines(
-                source_lines, blocks, sorted_blocks, find_start_of_class_body(class_def, source_lines)
-            )
+            return _rearrange_lines(source_lines, blocks, sorted_blocks, start)
         case True, True:
             seen = set[FunctionBlock]()
             for method in sorted(blocks, key=lambda method: (method.rank, method.name)):
                 visitor.sort_by_partition_and_name(method, method.rank, seen)
-            return _rearrange_lines_by_partition(
-                source_lines, blocks, sorted_blocks, find_start_of_class_body(class_def, source_lines)
-            )
+            return _rearrange_lines_by_partition(source_lines, blocks, sorted_blocks, start)
 
 
 def _find_dependencies(
@@ -180,8 +173,8 @@ def _find_dependencies(
 @dataclass(slots=True)
 class DepthFirstVisitor(Generic[B]):
     dependencies: AcyclicGraph[B]
-    sorted_blocks: MutableSequence[Block]
-    path: list[Block] = field(default_factory=list, init=False)
+    sorted_blocks: MutableSequence[B]
+    path: list[B] = field(default_factory=list, init=False)
 
     def sort_top_block(self, block: B) -> None:
         self._move_current_block(block)
@@ -219,7 +212,7 @@ class DepthFirstVisitor(Generic[B]):
     def _iter_successors_if(self, fn: Callable[[B], object], block: B) -> filter[B]:
         return filter(fn, self.dependencies.get_successors(block))
 
-    def _move_current_block(self, block: Block) -> None:
+    def _move_current_block(self, block: B) -> None:
         # Move the current block last
         try:
             self.sorted_blocks.remove(block)
@@ -232,11 +225,11 @@ FnVisitor: TypeAlias = DepthFirstVisitor[FunctionBlock]
 
 
 def _rearrange_lines(
-    source_lines: list[str], original_blocks: Collection[Block], sorted_blocks: Sequence[Block], start: int = 0
+    source_lines: list[str], original_blocks: Collection[B], sorted_blocks: Sequence[B], start: int = 0
 ) -> list[str]:
     """Copy lines from the original source, shifting the methods/functions around as needed."""
 
-    def lines_of(block: Block) -> list[str]:
+    def lines_of(block: B) -> list[str]:
         return source_lines[block.start : block.end]
 
     result: list[str] = []
@@ -264,7 +257,7 @@ def _rearrange_lines(
 
 
 def _rearrange_lines_by_partition(
-    source_lines: list[str], original_blocks: Collection[Block], sorted_blocks: list[Block], start: int = 0
+    source_lines: list[str], original_blocks: Collection[B], sorted_blocks: list[B], start: int = 0
 ) -> list[str]:
     def lines_of(block: Block) -> list[str]:
         return source_lines[block.start : block.end]
@@ -289,7 +282,7 @@ def _rearrange_lines_by_partition(
     return _finalize_rearranged_lines(source_lines, result, start, pos)
 
 
-def _finalize_rearranged_lines(source_lines: list[str], result: list[str], start: int, pos: int) -> list[str]:
+def _finalize_rearranged_lines(source_lines: Sequence[str], result: list[str], start: int, pos: int) -> list[str]:
     if start == 0:
         # Include trailing content if we are doing the whole file
         result.extend(source_lines[pos:])
@@ -301,9 +294,9 @@ def _finalize_rearranged_lines(source_lines: list[str], result: list[str], start
 
 
 def _ensure_number_of_leading_blank_lines_remains_unchanged(
-    original_lines: list[str],
+    original_lines: Collection[str],
     rearranged_lines: list[str],
-):
+) -> list[str]:
     assert len(original_lines) == len(rearranged_lines)
     num_leading_blanks_before = 0
     for _ in takewhile(is_blank, original_lines):
