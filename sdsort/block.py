@@ -38,7 +38,7 @@ from .utils.ast import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Collection, Generator, Iterable
+    from collections.abc import Collection, Generator
 
     from .context import Context
 
@@ -167,21 +167,19 @@ class StatementBlock(Block):
 
 class ClassBlock(Block):
     _nodes: list[ClassDef]
-    _methods: list[FunctionBlock]
 
     def __init__(self, node: ClassDef, source_lines: list[str], context: Context):
         super().__init__(node, context)
         self.start, self.end = determine_line_range(node, source_lines)
         method_nodes = get_method_nodes(node)
-        methods: list[FunctionBlock] = []
+        self._methods: list[FunctionBlock] = []
         current_block: Block | None = None
         match context.visibility_ranks:
             case None:
                 for method_node in method_nodes:
                     if current_block is None or not current_block.append(method_node):
                         current_block = FunctionBlock(method_node, source_lines, self._context)
-                        methods.append(current_block)
-                self._methods = methods
+                        self._methods.append(current_block)
                 resolve_overlapping_ranges(self._methods)
             case ranks:
                 ok_ranks = ranks.into_ok_or_default()
@@ -190,10 +188,9 @@ class ClassBlock(Block):
                     if current_block is None or not current_block.append(method_node):
                         current_block = FunctionBlock(method_node, source_lines, context)
                         current_block.start = max(current_block.start, running_end)
-                        methods.append(current_block)
+                        self._methods.append(current_block)
                         ok_ranks.classify_for_block(current_block, method_node.name)
                     running_end = max(running_end, current_block.end)
-                self._methods = methods
 
     def append(self, node: AST) -> bool:
         return False
@@ -242,7 +239,7 @@ class ClassBlock(Block):
         return self._methods
 
 
-def resolve_overlapping_ranges(blocks: Iterable[Block]) -> None:
+def resolve_overlapping_ranges(blocks: Collection[Block]) -> None:
     running_end = 0
     for block in blocks:
         block.start = max(block.start, running_end)
