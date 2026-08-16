@@ -21,7 +21,7 @@ from .utils.ast import (
 from .utils.file import read_file, split_lines
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Collection
+    from collections.abc import Callable, Collection, MutableSequence, Sequence
 
 ResultType: TypeAlias = (
     tuple[Literal["sorted"], str] | tuple[Literal["skipped"], None] | tuple[Literal["unchanged"], None]
@@ -120,17 +120,21 @@ def _sort_methods_within_class(source_lines: list[str], class_def: ClassDef, con
 
     # Re-order methods as needed
     sorted_blocks: list[Block] = []
+    visitor = DepthFirstVisitor(dependencies, sorted_blocks)
     match context.sort_by_visibility, context.sort_by_name:
-        case False, _:
-            visitor = DepthFirstVisitor(dependencies, sorted_blocks)
+        case False, False:
             for block in blocks:
                 visitor.sort(block)
-            # Copy lines from the original source, shifting the methods around as needed
+            return _rearrange_lines(
+                source_lines, blocks, sorted_blocks, find_start_of_class_body(class_def, source_lines)
+            )
+        case False, True:
+            for method in sorted(blocks, key=lambda method: method.name):
+                visitor.sort(method)
             return _rearrange_lines(
                 source_lines, blocks, sorted_blocks, find_start_of_class_body(class_def, source_lines)
             )
         case True, False:
-            visitor = DepthFirstVisitor(dependencies, sorted_blocks)
             for method in sorted(blocks, key=lambda method: method.rank):
                 visitor.sort_by_partition(method, method.rank)
             return _rearrange_lines(
@@ -138,7 +142,6 @@ def _sort_methods_within_class(source_lines: list[str], class_def: ClassDef, con
             )
         case True, True:
             seen = set[FunctionBlock]()
-            visitor = DepthFirstVisitor(dependencies, sorted_blocks)
             for method in sorted(blocks, key=lambda method: (method.rank, method.name)):
                 visitor.sort_by_partition_and_name(method, method.rank, seen)
             return _rearrange_lines_by_partition(
@@ -177,7 +180,7 @@ def _find_dependencies(
 @dataclass(slots=True)
 class DepthFirstVisitor(Generic[B]):
     dependencies: AcyclicGraph[B]
-    sorted_blocks: list[Block]
+    sorted_blocks: MutableSequence[Block]
     path: list[Block] = field(default_factory=list, init=False)
 
     def sort_top_block(self, block: B) -> None:
@@ -229,8 +232,10 @@ FnVisitor: TypeAlias = DepthFirstVisitor[FunctionBlock]
 
 
 def _rearrange_lines(
-    source_lines: list[str], original_blocks: Collection[Block], sorted_blocks: list[Block], start: int = 0
+    source_lines: list[str], original_blocks: Collection[Block], sorted_blocks: Sequence[Block], start: int = 0
 ) -> list[str]:
+    """Copy lines from the original source, shifting the methods/functions around as needed."""
+
     def lines_of(block: Block) -> list[str]:
         return source_lines[block.start : block.end]
 
