@@ -183,12 +183,21 @@ def test_visibility_and_name_cases(
     assert actual_output == read_file(TEST_CASES_DIR / f"{expected_case_name}.out.py")
 
 
-@pytest.mark.parametrize("case_name", ["full_ranks", "partial_ranks", "partial_ranks_by_name"])
+@pytest.mark.parametrize(
+    "case_name",
+    [
+        "full_ranks",
+        "partial_ranks",
+        "partial_ranks_by_name",
+        "no_ranks_by_name",
+        "no_ranks_by_name_with_dependencies",
+        "no_ranks_by_name_complex",
+    ],
+)
 def test_toml_configuration_cases(case_name: str):
     case_dir = TOML_CASES_DIR / case_name
 
     status, actual_output = step_down_sort(case_dir / "input.py")
-
     assert status == "sorted"
     assert actual_output == read_file(case_dir / "expected.py")
 
