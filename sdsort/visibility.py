@@ -36,7 +36,7 @@ class VisibilityRanks(Generic[T]):
         """
         keys = ("dunder", "private", "protected", "public")
         values = tuple(config.get(k) for k in keys)
-        if not any(values):
+        if all(value is None for value in values):
             return None
         else:
             return VisibilityRanks(*values)
