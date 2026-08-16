@@ -21,7 +21,7 @@ from .utils.ast import (
 from .utils.file import read_file, split_lines
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Collection, MutableSequence, Sequence
+    from collections.abc import Callable, Collection, Sequence
 
 ResultType: TypeAlias = (
     tuple[Literal["sorted"], str] | tuple[Literal["skipped"], None] | tuple[Literal["unchanged"], None]
@@ -91,7 +91,7 @@ def _sort_top_level_blocks(source_lines: list[str], syntax_tree: Module, context
         return source_lines
 
     deps = _find_dependencies(blocks, _function_call_target)
-    visitor = DepthFirstVisitor(deps, [])
+    visitor = DepthFirstVisitor(deps)
     for block in blocks:
         visitor.sort_top_block(block)
     return _rearrange_lines(source_lines, blocks, visitor.sorted_blocks)
@@ -119,27 +119,26 @@ def _sort_methods_within_class(source_lines: list[str], class_def: ClassDef, con
     dependencies = _find_dependencies(blocks, _method_call_target)
 
     # Re-order methods as needed
-    sorted_blocks: list[FunctionBlock] = []
-    visitor = DepthFirstVisitor(dependencies, sorted_blocks)
+    visitor = DepthFirstVisitor(dependencies)
     start = find_start_of_class_body(class_def, source_lines)
     match context.sort_by_visibility, context.sort_by_name:
         case False, False:
             for block in blocks:
                 visitor.sort(block)
-            return _rearrange_lines(source_lines, blocks, sorted_blocks, start)
+            return _rearrange_lines(source_lines, blocks, visitor.sorted_blocks, start)
         case False, True:
             for method in sorted(blocks, key=lambda method: method.name):
                 visitor.sort(method)
-            return _rearrange_lines(source_lines, blocks, sorted_blocks, start)
+            return _rearrange_lines(source_lines, blocks, visitor.sorted_blocks, start)
         case True, False:
             for method in sorted(blocks, key=lambda method: method.rank):
-                visitor.sort_by_partition(method, method.rank)
-            return _rearrange_lines(source_lines, blocks, sorted_blocks, start)
+                visitor.sort_by_partition(method)
+            return _rearrange_lines(source_lines, blocks, visitor.sorted_blocks, start)
         case True, True:
             seen = set[FunctionBlock]()
             for method in sorted(blocks, key=lambda method: (method.rank, method.name)):
-                visitor.sort_by_partition_and_name(method, method.rank, seen)
-            return _rearrange_lines_by_partition(source_lines, blocks, sorted_blocks, start)
+                visitor.sort_by_partition_and_name(method, seen)
+            return _rearrange_lines_by_partition(source_lines, blocks, visitor.sorted_blocks, start)
 
 
 def _find_dependencies(
@@ -173,44 +172,40 @@ def _find_dependencies(
 @dataclass(slots=True)
 class DepthFirstVisitor(Generic[B]):
     dependencies: AcyclicGraph[B]
-    sorted_blocks: MutableSequence[B]
+    sorted_blocks: list[B] = field(default_factory=list, init=False)
     path: list[B] = field(default_factory=list, init=False)
 
     def sort_top_block(self, block: B) -> None:
         self._move_current_block(block)
-        for dependency in self._iter_successors_if(lambda s: s not in self.path, block):
+        for dependency in self.dependencies.iter_if(lambda s: s not in self.path, block):
             self.sort_top_block(dependency)
 
     def sort(self, block: B) -> None:
         self.path.append(block)
         self._move_current_block(block)
-        for dependency in self._iter_successors_if(lambda s: s not in self.path, block):
+        for dependency in self.dependencies.iter_if(lambda s: s not in self.path, block):
             self.sort(dependency)
         self.path.pop()
 
-    def sort_by_partition(self: FnVisitor, block: FunctionBlock, rank: int) -> None:
+    def sort_by_partition(self: FnVisitor, block: FunctionBlock) -> None:
         self.path.append(block)
         self._move_current_block(block)
-        for dependency in self._iter_successors_if(lambda s: s not in self.path and s.rank == rank, block):
-            self.sort_by_partition(dependency, rank)
+        for dependency in self.dependencies.iter_if(lambda s: s not in self.path and s.rank == block.rank, block):
+            self.sort_by_partition(dependency)
         self.path.pop()
 
-    def sort_by_partition_and_name(
-        self: FnVisitor, block: FunctionBlock, rank: int, seen: set[FunctionBlock]
-    ) -> None:
+    def sort_by_partition_and_name(self: FnVisitor, block: FunctionBlock, seen: set[FunctionBlock]) -> None:
         if block in seen:
             return
-        seen.add(block)
-        self.path.append(block)
-        self._move_current_block(block)
-        for dependency in self._iter_successors_if(
-            lambda s: s not in self.path and s.rank == rank and s not in seen, block
-        ):
-            self.sort_by_partition_and_name(dependency, rank, seen)
-        self.path.pop()
-
-    def _iter_successors_if(self, fn: Callable[[B], object], block: B) -> filter[B]:
-        return filter(fn, self.dependencies.get_successors(block))
+        else:
+            seen.add(block)
+            self.path.append(block)
+            self._move_current_block(block)
+            for dependency in self.dependencies.iter_if(
+                lambda s: s not in self.path and s.rank == block.rank and s not in seen, block
+            ):
+                self.sort_by_partition_and_name(dependency, seen)
+            self.path.pop()
 
     def _move_current_block(self, block: B) -> None:
         # Move the current block last

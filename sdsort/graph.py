@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Generic, TypeVar
 from .block import Block
 
 if TYPE_CHECKING:
-    from collections.abc import Generator
+    from collections.abc import Callable, Generator
 
 B = TypeVar("B", bound=Block)
 
@@ -38,3 +38,6 @@ class AcyclicGraph(Generic[B]):
 
     def get_successors(self, _from: B) -> Generator[B, None, None]:
         yield from self._edges[_from]
+
+    def iter_if(self, fn: Callable[[B], object], block: B) -> filter[B]:
+        return filter(fn, self.get_successors(block))
