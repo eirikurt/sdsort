@@ -192,6 +192,7 @@ def ruff_error_counts(source: str, filename: str) -> dict[str, int]:
         input=source,
         capture_output=True,
         text=True,
+        encoding="utf-8",
     )
     counts: dict[str, int] = {}
     for line in result.stdout.splitlines():
