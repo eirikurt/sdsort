@@ -43,7 +43,6 @@ def gather_context(root_node: Module, file_path: Path | None = None) -> Context:
     return Context(deferred_annotations, VisibilityRanks.try_from(config), config.get("sort-by-name", False))
 
 
-@lru_cache
 def _get_config_and_annotations(file_path: Path | None, deferred_annotations: bool) -> tuple[TomlTable, bool]:
     match file_path:
         case None:
@@ -57,12 +56,17 @@ def _handle_pyproject(file_path: Path, deferred_annotations: bool) -> tuple[Toml
         case None:
             return {}, deferred_annotations
         case pyproject:
-            with pyproject.open("rb") as f:
-                data = tomllib.load(f)
-                config: TomlTable = data.get("tool", {}).get("sdsort", {})
-                if not deferred_annotations:
-                    deferred_annotations = _targets_python314_or_newer(data)
+            data = _load_pyproject(pyproject)
+            config: TomlTable = data.get("tool", {}).get("sdsort", {})
+            if not deferred_annotations:
+                deferred_annotations = _targets_python314_or_newer(data)
             return config, deferred_annotations
+
+
+@lru_cache
+def _load_pyproject(pyproject: Path) -> TomlTable:
+    with pyproject.open("rb") as f:
+        return tomllib.load(f)
 
 
 def _targets_python314_or_newer(data: TomlTable) -> bool:

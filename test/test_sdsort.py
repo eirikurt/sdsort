@@ -5,14 +5,18 @@ import sys
 import tomllib
 from os import mkdir
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 from click.testing import CliRunner
 
-from sdsort import cli, main, sort, step_down_sort
+from sdsort import cli, context, main, sort, step_down_sort
 from sdsort.cli import _MAX_WORKERS, _MIN_FILES_FOR_PARALLELISM, _worker_count
 from sdsort.context import Context, VisibilityRanks, _targets_python314_or_newer
 from sdsort.utils.file import read_file
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 TEST_CASES_DIR = Path("test", "cases")
 TOML_CASES_DIR = Path("test", "toml_cases")
@@ -200,6 +204,30 @@ def test_toml_configuration_cases(case_name: str):
     status, actual_output = step_down_sort(case_dir / "input.py")
     assert status == "sorted"
     assert actual_output == read_file(case_dir / "expected.py")
+
+
+def test_pyproject_is_parsed_once_per_project(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    (tmp_path / "pyproject.toml").write_text("", encoding="utf-8")
+    source_paths = (tmp_path / "first.py", tmp_path / "second.py")
+    for source_path in source_paths:
+        source_path.write_text("def function():\n    pass\n", encoding="utf-8")
+
+    real_load: Callable[..., object] = context.tomllib.load
+    load_calls = 0
+
+    def counting_load(file: object) -> dict[str, object]:
+        nonlocal load_calls
+        load_calls += 1
+        return real_load(file)  # pyright: ignore[reportArgumentType]
+
+    # Avoid false positives if a previous test already called _load_pyproject() and cached the result
+    context._load_pyproject.cache_clear()
+    monkeypatch.setattr(context.tomllib, "load", counting_load)
+
+    for source_path in source_paths:
+        step_down_sort(source_path)
+
+    assert load_calls == 1
 
 
 @pytest.mark.skipif(sys.version_info < (3, 12), reason="`type` alias statement requires Python 3.12+")
