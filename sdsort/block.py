@@ -242,7 +242,7 @@ class FunctionBlock(Block):
         self.start, self.end = determine_line_range(node, source_lines)
         self._source_lines = source_lines
         self.name = node.name
-        self.key = [ranks[rule.from_node(node)] for rule, ranks in context.config.items()]
+        self.key: list[int] = [ranks[rule.from_node(node)] for rule, ranks in context.config.items()]
 
     def append(self, node: AST) -> bool:
         if isinstance(node, (FunctionDef, AsyncFunctionDef)) and node.name == self._nodes[0].name:

@@ -127,7 +127,7 @@ def _sort_methods_within_class(source_lines: list[str], class_def: ClassDef, con
                 visitor.sort(block)
             return _rearrange_lines(source_lines, blocks, visitor.sorted_blocks, start)
         case False, True:
-            for method in sorted(blocks, key=lambda method: method.key):
+            for method in sorted(blocks, key=lambda method: method.name):
                 visitor.sort(method)
             return _rearrange_lines(source_lines, blocks, visitor.sorted_blocks, start)
         case True, False:
