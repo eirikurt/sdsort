@@ -6,6 +6,7 @@ from .rules import Rule
 
 if TYPE_CHECKING:
     from .context import TomlTable
+    from .utils.ast import Function
 
 
 Ranks: TypeAlias = dict[Rule, int]
@@ -26,6 +27,10 @@ def from_table(table: TomlTable) -> Config:
     """Create active rule configurations in the configured partition order."""
     rules = (MAPPING[rule] for rule in table.get("rules-order", []))
     return Config((rule, _ranks_from_rule(table, rule)) for rule in rules)
+
+
+def compute_key(config: Config, node: Function) -> tuple[int, ...]:
+    return tuple(ranks[rule.from_node(node)] for rule, ranks in config.items())
 
 
 def _ranks_from_rule(table: TomlTable, rule: type[Rule]) -> Ranks:
