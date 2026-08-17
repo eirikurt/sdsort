@@ -137,10 +137,12 @@ def test_visibility_and_name_cases(
     def configured_context(_root: ast.Module, _path: Path | None = None) -> Context:
         return Context(
             deferred_annotations=False,
-            config=config.from_table({
-                "rules-order": ["visibility"],
-                "visibility": dict(zip(rules.Visibility, ranks)),
-            }),
+            config=config.from_table(
+                {
+                    "rules-order": ["visibility"],
+                    "visibility": dict(zip(rules.Visibility, ranks)),
+                }
+            ),
             sort_by_name=sort_by_name,
         )
 
