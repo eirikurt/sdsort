@@ -2,12 +2,11 @@ from __future__ import annotations
 
 from ast import Attribute, Call, ClassDef, Module, Name, parse
 from collections import defaultdict
-from dataclasses import dataclass, field
 from io import BytesIO
 from itertools import takewhile
 from pathlib import Path
 from tokenize import COMMENT, tokenize
-from typing import TYPE_CHECKING, Generic, Literal, TypeAlias, TypeVar
+from typing import TYPE_CHECKING, Literal, TypeAlias, TypeVar
 
 from .block import Block, ClassBlock, FunctionBlock, block_for, resolve_overlapping_ranges
 from .context import Context, gather_context
@@ -89,9 +88,7 @@ def _sort_top_level_blocks(source_lines: list[str], syntax_tree: Module, context
 
     if not blocks:
         return source_lines
-
-    deps = _find_dependencies(blocks, _function_call_target)
-    visitor = DepthFirstVisitor(deps)
+    visitor = _find_dependencies(blocks, _function_call_target).into_visitor()
     for block in blocks:
         visitor.sort_top_block(block)
     return _rearrange_lines(source_lines, blocks, visitor.sorted_blocks)
@@ -116,10 +113,8 @@ def _sort_methods_within_class(source_lines: list[str], class_def: ClassDef, con
     blocks = ClassBlock(class_def, source_lines, context).method_blocks
 
     # Build dependency graph among methods
-    dependencies = _find_dependencies(blocks, _method_call_target)
-
+    visitor = _find_dependencies(blocks, _method_call_target).into_visitor()
     # Re-order methods as needed
-    visitor = DepthFirstVisitor(dependencies)
     start = find_start_of_class_body(class_def, source_lines)
     match bool(context.config), context.sort_by_name:
         case False, False:
@@ -167,56 +162,6 @@ def _find_dependencies(
                         dependencies.add_edge(_from=block, to=successor_block)
 
     return dependencies
-
-
-@dataclass(slots=True)
-class DepthFirstVisitor(Generic[B]):
-    dependencies: AcyclicGraph[B]
-    sorted_blocks: list[B] = field(default_factory=list, init=False)
-    path: list[B] = field(default_factory=list, init=False)
-
-    def sort_top_block(self, block: B) -> None:
-        self._move_current_block(block)
-        for dependency in self.dependencies.iter_if(lambda s: s not in self.path, block):
-            self.sort_top_block(dependency)
-
-    def sort(self, block: B) -> None:
-        self.path.append(block)
-        self._move_current_block(block)
-        for dependency in self.dependencies.iter_if(lambda s: s not in self.path, block):
-            self.sort(dependency)
-        self.path.pop()
-
-    def sort_by_partition(self: FnVisitor, block: FunctionBlock) -> None:
-        self.path.append(block)
-        self._move_current_block(block)
-        for dependency in self.dependencies.iter_if(lambda s: s not in self.path and s.key == block.key, block):
-            self.sort_by_partition(dependency)
-        self.path.pop()
-
-    def sort_by_partition_and_name(self: FnVisitor, block: FunctionBlock, seen: set[FunctionBlock]) -> None:
-        if block in seen:
-            return
-        else:
-            seen.add(block)
-            self.path.append(block)
-            self._move_current_block(block)
-            for dependency in self.dependencies.iter_if(
-                lambda s: s not in self.path and s.key == block.key and s not in seen, block
-            ):
-                self.sort_by_partition_and_name(dependency, seen)
-            self.path.pop()
-
-    def _move_current_block(self, block: B) -> None:
-        # Move the current block last
-        try:
-            self.sorted_blocks.remove(block)
-        except ValueError:
-            pass
-        self.sorted_blocks.append(block)
-
-
-FnVisitor: TypeAlias = DepthFirstVisitor[FunctionBlock]
 
 
 def _rearrange_lines(
