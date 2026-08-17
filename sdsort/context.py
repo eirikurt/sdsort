@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import tomllib
 from ast import ImportFrom, Module
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import lru_cache
 from itertools import takewhile
 from typing import TYPE_CHECKING, Any, TypeVar
 
-from .visibility import VisibilityRanks
+from . import config
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -22,15 +22,10 @@ T = TypeVar("T", bound=int | None)
 class Context:
     deferred_annotations: bool
     """Whether lazy annotations are enabled or not."""
-    visibility_ranks: VisibilityRanks[int | None] | None = None
-    """Configuration options for sorting logic based on visibility of method names on a given class."""
+    config: config.Config = field(default_factory=config.Config)
     sort_by_name: bool = False
     """If `True`, sort methods by name after sorting by visibility.\\
     Default is `False`."""
-
-    @property
-    def sort_by_visibility(self) -> bool:
-        return self.visibility_ranks is not None
 
 
 def gather_context(root_node: Module, file_path: Path | None = None) -> Context:
@@ -39,8 +34,8 @@ def gather_context(root_node: Module, file_path: Path | None = None) -> Context:
         imprt.module == "__future__" and any(alias.name == "annotations" for alias in imprt.names)
         for imprt in imports
     )
-    config, deferred_annotations = _get_config_and_annotations(file_path, deferred_annotations)
-    return Context(deferred_annotations, VisibilityRanks.try_from(config), config.get("sort-by-name", False))
+    table, deferred_annotations = _get_config_and_annotations(file_path, deferred_annotations)
+    return Context(deferred_annotations, config.from_table(table), table.get("sort-by-name", False))
 
 
 def _get_config_and_annotations(file_path: Path | None, deferred_annotations: bool) -> tuple[TomlTable, bool]:

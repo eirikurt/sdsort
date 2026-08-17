@@ -174,23 +174,11 @@ class ClassBlock(Block):
         method_nodes = get_method_nodes(node)
         self._methods: list[FunctionBlock] = []
         current_block: Block | None = None
-        match context.visibility_ranks:
-            case None:
-                for method_node in method_nodes:
-                    if current_block is None or not current_block.append(method_node):
-                        current_block = FunctionBlock(method_node, source_lines, self._context)
-                        self._methods.append(current_block)
-                resolve_overlapping_ranges(self._methods)
-            case ranks:
-                ok_ranks = ranks.into_ok_or_default()
-                running_end = 0
-                for method_node in method_nodes:
-                    if current_block is None or not current_block.append(method_node):
-                        current_block = FunctionBlock(method_node, source_lines, context)
-                        current_block.start = max(current_block.start, running_end)
-                        self._methods.append(current_block)
-                        ok_ranks.classify_for_block(current_block, method_node.name)
-                    running_end = max(running_end, current_block.end)
+        for method_node in method_nodes:
+            if current_block is None or not current_block.append(method_node):
+                current_block = FunctionBlock(method_node, source_lines, self._context)
+                self._methods.append(current_block)
+        resolve_overlapping_ranges(self._methods)
 
     def append(self, node: AST) -> bool:
         return False
@@ -254,7 +242,7 @@ class FunctionBlock(Block):
         self.start, self.end = determine_line_range(node, source_lines)
         self._source_lines = source_lines
         self.name = node.name
-        self.rank = 0
+        self.key = [ranks[rule.from_node(node)] for rule, ranks in context.config.items()]
 
     def append(self, node: AST) -> bool:
         if isinstance(node, (FunctionDef, AsyncFunctionDef)) and node.name == self._nodes[0].name:

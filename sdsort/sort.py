@@ -121,22 +121,22 @@ def _sort_methods_within_class(source_lines: list[str], class_def: ClassDef, con
     # Re-order methods as needed
     visitor = DepthFirstVisitor(dependencies)
     start = find_start_of_class_body(class_def, source_lines)
-    match context.sort_by_visibility, context.sort_by_name:
+    match bool(context.config), context.sort_by_name:
         case False, False:
             for block in blocks:
                 visitor.sort(block)
             return _rearrange_lines(source_lines, blocks, visitor.sorted_blocks, start)
         case False, True:
-            for method in sorted(blocks, key=lambda method: method.name):
+            for method in sorted(blocks, key=lambda method: method.key):
                 visitor.sort(method)
             return _rearrange_lines(source_lines, blocks, visitor.sorted_blocks, start)
         case True, False:
-            for method in sorted(blocks, key=lambda method: method.rank):
+            for method in sorted(blocks, key=lambda method: method.key):
                 visitor.sort_by_partition(method)
             return _rearrange_lines(source_lines, blocks, visitor.sorted_blocks, start)
         case True, True:
             seen = set[FunctionBlock]()
-            for method in sorted(blocks, key=lambda method: (method.rank, method.name)):
+            for method in sorted(blocks, key=lambda method: (method.key, method.name)):
                 visitor.sort_by_partition_and_name(method, seen)
             return _rearrange_lines_by_partition(source_lines, blocks, visitor.sorted_blocks, start)
 
@@ -190,7 +190,7 @@ class DepthFirstVisitor(Generic[B]):
     def sort_by_partition(self: FnVisitor, block: FunctionBlock) -> None:
         self.path.append(block)
         self._move_current_block(block)
-        for dependency in self.dependencies.iter_if(lambda s: s not in self.path and s.rank == block.rank, block):
+        for dependency in self.dependencies.iter_if(lambda s: s not in self.path and s.key == block.key, block):
             self.sort_by_partition(dependency)
         self.path.pop()
 
@@ -202,7 +202,7 @@ class DepthFirstVisitor(Generic[B]):
             self.path.append(block)
             self._move_current_block(block)
             for dependency in self.dependencies.iter_if(
-                lambda s: s not in self.path and s.rank == block.rank and s not in seen, block
+                lambda s: s not in self.path and s.key == block.key and s not in seen, block
             ):
                 self.sort_by_partition_and_name(dependency, seen)
             self.path.pop()

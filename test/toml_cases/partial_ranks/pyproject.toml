@@ -1,3 +1,6 @@
 [tool.sdsort]
+rules-order = ["visibility"]
+
+[tool.sdsort.visibility]
 dunder = 1
 private = 2
