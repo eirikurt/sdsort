@@ -8,7 +8,7 @@ if TYPE_CHECKING:
     from sdsort.utils.ast import Function
 
 
-class Rule(StrEnum):
+class Clause(StrEnum):
     """Base class for all rules that can be applied when sorting methods.\\
     Each rule is represented by an enum value, and the order of the values defines the default sorting order when no configuration is provided."""
 
@@ -18,7 +18,7 @@ class Rule(StrEnum):
         """Determine the enum variant corresponding to the given `Function` AST node."""
 
 
-class Visibility(Rule):
+class Visibility(Clause):
     """Defines the visibility of a method based on its name, i.e is it intended to be public, or an implementation detail.\\
     The visibility is determined by the naming convention of the method."""
 

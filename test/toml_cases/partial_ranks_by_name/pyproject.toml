@@ -1,5 +1,5 @@
 [tool.sdsort]
-rules-order = ["visibility"]
+method-order = ["visibility"]
 sort-by-name = true
 
 [tool.sdsort.visibility]

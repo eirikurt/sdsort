@@ -2,38 +2,38 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Final, TypeAlias
 
-from .rules import Rule
+from .rules import Clause
 
 if TYPE_CHECKING:
     from .context import TomlTable
     from .utils.ast import Function
 
 
-Ranks: TypeAlias = dict[Rule, int]
+Ranks: TypeAlias = dict[Clause, int]
 """A configuration mapping from enum keys to integer ranks."""
 
 
-Config: TypeAlias = dict[type[Rule], Ranks]
-"""A mapping from rule classes to their corresponding sub-configurations."""
+Config: TypeAlias = dict[type[Clause], Ranks]
+"""A mapping from `Clause` classes to their corresponding sub-configurations."""
 
 
-MAPPING: Final[dict[str, type[Rule]]] = {rule.__name__.lower(): rule for rule in Rule.__subclasses__()}
-"""Cached mapping of name -> rule for all `Rule` subclasses."""
-DEFAULTS: Final[Config] = {rule: Ranks(zip(rule, range(len(rule)))) for rule in MAPPING.values()}
+MAPPING: Final[dict[str, type[Clause]]] = {clause.__name__.lower(): clause for clause in Clause.__subclasses__()}
+"""Cached mapping of name -> clause for all `Clause` subclasses."""
+DEFAULTS: Final[Config] = {clause: Ranks(zip(clause, range(len(clause)))) for clause in MAPPING.values()}
 """Cached default config."""
 
 
 def from_table(table: TomlTable) -> Config:
-    """Create active rule configurations in the configured partition order."""
-    rules = (MAPPING[rule] for rule in table.get("rules-order", []))
-    return Config((rule, _ranks_from_rule(table, rule)) for rule in rules)
+    """Create active clause configurations in the configured partition order."""
+    clauses = (MAPPING[clause] for clause in table.get("method-order", []))
+    return Config((clause, _ranks_from_rule(table, clause)) for clause in clauses)
 
 
 def compute_key(config: Config, node: Function) -> tuple[int, ...]:
-    return tuple(ranks[rule.from_node(node)] for rule, ranks in config.items())
+    return tuple(ranks[clause.from_node(node)] for clause, ranks in config.items())
 
 
-def _ranks_from_rule(table: TomlTable, rule: type[Rule]) -> Ranks:
+def _ranks_from_rule(table: TomlTable, rule: type[Clause]) -> Ranks:
     match table.get(rule.__name__.lower()):
         case None:
             return DEFAULTS[rule]
@@ -41,7 +41,7 @@ def _ranks_from_rule(table: TomlTable, rule: type[Rule]) -> Ranks:
             return _ranks_from_table(sub_table, rule)
 
 
-def _ranks_from_table(table: TomlTable, rule: type[Rule]) -> Ranks:
+def _ranks_from_table(table: TomlTable, rule: type[Clause]) -> Ranks:
     default = len(rule)
     ranks: Ranks = {}
     any_ok = False

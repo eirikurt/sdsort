@@ -139,7 +139,7 @@ def test_visibility_and_name_cases(
             deferred_annotations=False,
             config=config.from_table(
                 {
-                    "rules-order": ["visibility"],
+                    "method-order": ["visibility"],
                     "visibility": dict(zip(rules.Visibility, ranks)),
                 }
             ),
