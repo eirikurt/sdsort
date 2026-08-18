@@ -1,6 +1,3 @@
 [tool.sdsort]
 method-order = ["visibility"]
-
-[tool.sdsort.visibility]
-dunder = 1
-private = 2
+visibility-order = ["dunder", "private"]

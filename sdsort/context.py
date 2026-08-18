@@ -35,7 +35,8 @@ def gather_context(root_node: Module, file_path: Path | None = None) -> Context:
         for imprt in imports
     )
     table, deferred_annotations = _get_config_and_annotations(file_path, deferred_annotations)
-    return Context(deferred_annotations, config.from_table(table), table.get("sort-by-name", False))
+    # TODO: awkward handling of the name clause. Should refactor
+    return Context(deferred_annotations, config.from_table(table), "name" in table.get("method-order", []))
 
 
 def _get_config_and_annotations(file_path: Path | None, deferred_annotations: bool) -> tuple[TomlTable, bool]:

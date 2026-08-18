@@ -1,7 +1,3 @@
 [tool.sdsort]
-method-order = ["visibility"]
-sort-by-name = true
-
-[tool.sdsort.visibility]
-dunder = 1
-private = 2
+method-order = ["visibility", "name"]
+visibility-order = ["dunder", "private"]

@@ -11,9 +11,10 @@ from typing import TYPE_CHECKING
 import pytest
 from click.testing import CliRunner
 
-from sdsort import cli, config, context, main, rules, sort, step_down_sort
+from sdsort import cli, config, context, main, sort, step_down_sort
 from sdsort.cli import _MAX_WORKERS, _MIN_FILES_FOR_PARALLELISM, _worker_count
 from sdsort.context import Context, _targets_python314_or_newer
+from sdsort.rules import Visibility
 from sdsort.utils.file import read_file
 
 if TYPE_CHECKING:
@@ -108,41 +109,71 @@ def test_all_cases(test_case: str):
 
 
 @pytest.mark.parametrize(
-    "case_name,expected_case_name,ranks,sort_by_name",
+    "case_name,expected_case_name,visibility_order,sort_by_name",
     [
-        ("partitioned_methods", "partitioned_methods", (1, 3, 3, 2), True),
-        ("partitioned_methods", "partitioned_methods_without_name", (1, 3, 3, 2), False),
-        ("visibility_and_name_dependency_chain", "visibility_and_name_dependency_chain", (4, 1, 3, 2), True),
+        (
+            "partitioned_methods",
+            "partitioned_methods",
+            (Visibility.DUNDER, Visibility.PUBLIC, Visibility.PRIVATE, Visibility.PROTECTED),
+            True,
+        ),
+        (
+            "partitioned_methods",
+            "partitioned_methods_without_name",
+            (Visibility.DUNDER, Visibility.PUBLIC, Visibility.PRIVATE, Visibility.PROTECTED),
+            False,
+        ),
+        (
+            "visibility_and_name_dependency_chain",
+            "visibility_and_name_dependency_chain",
+            (Visibility.PRIVATE, Visibility.PUBLIC, Visibility.PROTECTED, Visibility.DUNDER),
+            True,
+        ),
         (
             "visibility_and_name_cross_partition_dependencies",
             "visibility_and_name_cross_partition_dependencies",
-            (4, 3, 2, 1),
+            (Visibility.PUBLIC, Visibility.PROTECTED, Visibility.PRIVATE, Visibility.DUNDER),
             True,
         ),
-        ("async_methods_with_visibility_and_name", "async_methods_with_visibility_and_name", (1, 2, 3, 4), True),
-        ("overloads_with_visibility_and_name", "overloads_with_visibility_and_name", (1, 2, 3, 4), True),
-        ("visibility_and_name_recursive_methods", "visibility_and_name_recursive_methods", (1, 2, 3, 4), True),
-        ("partial_visibility_ranks", "partial_visibility_ranks", (1, 2, None, None), False),
-        ("partial_visibility_ranks", "partial_visibility_ranks", (1, None, None, None), False),
-        ("partial_visibility_ranks", "partial_visibility_ranks_by_name", (1, 2, None, None), True),
+        (
+            "async_methods_with_visibility_and_name",
+            "async_methods_with_visibility_and_name",
+            (Visibility.DUNDER, Visibility.PRIVATE, Visibility.PROTECTED, Visibility.PUBLIC),
+            True,
+        ),
+        (
+            "overloads_with_visibility_and_name",
+            "overloads_with_visibility_and_name",
+            (Visibility.DUNDER, Visibility.PRIVATE, Visibility.PROTECTED, Visibility.PUBLIC),
+            True,
+        ),
+        (
+            "visibility_and_name_recursive_methods",
+            "visibility_and_name_recursive_methods",
+            (Visibility.DUNDER, Visibility.PRIVATE, Visibility.PROTECTED, Visibility.PUBLIC),
+            True,
+        ),
+        ("partial_visibility_ranks", "partial_visibility_ranks", (Visibility.DUNDER, Visibility.PRIVATE), False),
+        ("partial_visibility_ranks", "partial_visibility_ranks", (Visibility.DUNDER,), False),
+        (
+            "partial_visibility_ranks",
+            "partial_visibility_ranks_by_name",
+            (Visibility.DUNDER, Visibility.PRIVATE),
+            True,
+        ),
     ],
 )
 def test_visibility_and_name_cases(
     monkeypatch: pytest.MonkeyPatch,
     case_name: str,
     expected_case_name: str,
-    ranks: Iterable[int | None],
+    visibility_order: Iterable[Visibility],
     sort_by_name: bool,
 ) -> None:
     def configured_context(_root: ast.Module, _path: Path | None = None) -> Context:
         return Context(
             deferred_annotations=False,
-            config=config.from_table(
-                {
-                    "method-order": ["visibility"],
-                    "visibility": dict(zip(rules.Visibility, ranks)),
-                }
-            ),
+            config=config.from_table({"method-order": ["visibility"], "visibility-order": visibility_order}),
             sort_by_name=sort_by_name,
         )
 
