@@ -24,8 +24,7 @@ class Context:
     """Whether lazy annotations are enabled or not."""
     config: config.Config = field(default_factory=config.Config)
     sort_by_name: bool = False
-    """If `True`, sort methods by name after sorting by visibility.\\
-    Default is `False`."""
+    sort_by_dependency: bool = True
 
 
 def gather_context(root_node: Module, file_path: Path | None = None) -> Context:
@@ -35,8 +34,12 @@ def gather_context(root_node: Module, file_path: Path | None = None) -> Context:
         for imprt in imports
     )
     table, deferred_annotations = _get_config_and_annotations(file_path, deferred_annotations)
-    # TODO: awkward handling of the name clause. Should refactor
-    return Context(deferred_annotations, config.from_table(table), table.get("method-by-name", False))
+    return Context(
+        deferred_annotations,
+        config.from_table(table),
+        table.get("method-by-name", False),
+        table.get("method-by-dependency", True),
+    )
 
 
 def _get_config_and_annotations(file_path: Path | None, deferred_annotations: bool) -> tuple[TomlTable, bool]:
