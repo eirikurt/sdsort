@@ -9,13 +9,17 @@ if TYPE_CHECKING:
 
 
 class Clause(StrEnum):
-    """Base class for all rules that can be applied when sorting methods.\\
-    Each rule is represented by an enum value, and the order of the values defines the default sorting order when no configuration is provided."""
+    """Base class for all clauses that can be applied when sorting methods.\\
+    Each clause is represented by an enum value, and the order of the values defines the default sorting order when no configuration is provided."""
 
     @classmethod
     @abstractmethod
     def from_node(cls, node: Function) -> Self:
         """Determine the enum variant corresponding to the given `Function` AST node."""
+
+    @classmethod
+    def config_name(cls) -> str:
+        return f"{cls.__name__.lower()}-order"
 
 
 class Visibility(Clause):
@@ -24,12 +28,12 @@ class Visibility(Clause):
 
     DUNDER = auto()
     """A method name that starts and ends with double underscores (e.g. `__init__`)."""
-    PRIVATE = auto()
-    """A method name with same prefix as a dunder, but no suffix (e.g. `__private`)."""
-    PROTECTED = auto()
-    """A method name that starts with a single underscore (e.g. `_protected`)."""
     PUBLIC = auto()
     """Any method with no naming pattern corresponding to the above (e.g. `public`)."""
+    PROTECTED = auto()
+    """A method name that starts with a single underscore (e.g. `_protected`)."""
+    PRIVATE = auto()
+    """A method name with same prefix as a dunder, but no suffix (e.g. `__private`)."""
 
     @classmethod
     def from_node(cls, node: Function) -> Visibility:

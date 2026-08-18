@@ -1,2 +1,2 @@
 [tool.sdsort]
-method-order = ["name"]
+method-by-name = true

@@ -25,20 +25,19 @@ DEFAULTS: Final[Config] = {clause: Ranks(zip(clause, range(len(clause)))) for cl
 
 def from_table(table: TomlTable) -> Config:
     """Create active clause configurations in the configured partition order."""
-    clauses = (MAPPING[clause] for clause in table.get("method-order", []) if clause != "name")
-    return Config((clause, _ranks_from_rule(table, clause)) for clause in clauses)
+    clauses = (MAPPING[clause] for clause in table.get("method-order", []))
+    return {clause: _ranks_from_clause(table, clause) for clause in clauses}
 
 
 def compute_key(config: Config, node: Function) -> tuple[int, ...]:
     return tuple(ranks[clause.from_node(node)] for clause, ranks in config.items())
 
 
-def _ranks_from_rule(table: TomlTable, rule: type[Clause]) -> Ranks:
-    name = rule.__name__.lower()
-    match table.get(f"{name}-order"):
-        case None | []:
-            return DEFAULTS[rule]
+def _ranks_from_clause(table: TomlTable, clause: type[Clause]) -> Ranks:
+    match table.get(clause.config_name(), []):
+        case []:
+            return DEFAULTS[clause]
         case order:
-            default = len(rule)
+            default = len(clause)
             order_ranks = dict(zip(order, range(len(order))))
-            return {clause: order_ranks.get(clause, default) for clause in rule}
+            return {k: order_ranks.get(k, default) for k in clause}
