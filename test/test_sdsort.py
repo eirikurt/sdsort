@@ -89,6 +89,7 @@ def sorted_output() -> str:
         "class_attribute_name_collision",
         "class_attribute_references_outer_function",
         "dangling_comment_between_defs",
+        "moved_class_with_dependency",
         "deferred_class_attribute_annotations",
         "deferred_statement_annotation",
         "skip_file_directive",
