@@ -58,6 +58,11 @@ Each subdirectory is one configuration, holding one or more case pairs that exer
 `pyproject.toml` is deliberately empty so those cases resolve their configuration there
 rather than from the repository root.
 
+Directory names describe the configuration: the stem names the `visibility-order` by its
+leading entries, `_only` marks a partial order whose unlisted visibilities sort last, and
+`_by_name` marks `"name"` in `method-order`. Case names describe only the case, since the
+directory already carries the configuration.
+
 `test_cases` discovers the pairs by scanning, so a new case is added by dropping a file
 pair in (or a new subdirectory with its own `pyproject.toml`) — no test code to touch. It
 compares `step_down_sort()` output against the `.out.py` content, and requires a case whose

@@ -70,9 +70,22 @@ test/cases/<configuration>/
 ```
 
 `test/cases/default/` is where most cases live — its `pyproject.toml` holds no
-`[tool.sdsort]` table, so those cases exercise sdsort's default behavior. The
-other directories each pin one configuration (`full_ranks`, `partial_ranks`,
-`private_first_by_name`, …) and hold the cases that exercise it.
+`[tool.sdsort]` table, so those cases exercise sdsort's default behavior. Each
+other directory pins one configuration and holds the cases that exercise it. The
+directory name describes that configuration:
+
+- The stem names the `visibility-order` by its leading entries —
+  `dunder_then_private`, `private_first`.
+- `_only` marks a partial `visibility-order`: the visibilities it doesn't list
+  are unranked and sort last (`dunder_and_private_only`, `dunder_only`).
+- `_by_name` marks `"name"` in `method-order`, i.e. methods that are otherwise
+  tied sort alphabetically.
+- `no_visibility_by_name` leaves `"visibility"` out of `method-order` entirely,
+  so `visibility-order` never comes into play.
+
+Because the directory states the configuration, a case name only has to say what
+the case exercises — `dependency_chain`, not
+`visibility_and_name_dependency_chain`.
 
 The runner in `test/test_sdsort.py` discovers every pair by scanning, feeds each
 `.in.py` file through `step_down_sort()`, and asserts the output matches the
