@@ -1,3 +1,3 @@
 [tool.sdsort]
 method-order = ["visibility", "dependency", "name"]
-visibility-order = ["dunder", "private"]
+visibility-order = ["public", "protected", "private", "dunder"]

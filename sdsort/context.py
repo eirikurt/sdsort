@@ -7,7 +7,7 @@ from functools import lru_cache
 from itertools import takewhile
 from typing import TYPE_CHECKING, Any, TypeVar
 
-from . import config
+from .config import Config
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -22,9 +22,7 @@ T = TypeVar("T", bound=int | None)
 class Context:
     deferred_annotations: bool
     """Whether lazy annotations are enabled or not."""
-    config: config.Config = field(default_factory=config.Config)
-    sort_by_name: bool = False
-    sort_by_dependency: bool = True
+    config: Config = field(default_factory=Config)
 
 
 def gather_context(root_node: Module, file_path: Path | None = None) -> Context:
@@ -33,12 +31,10 @@ def gather_context(root_node: Module, file_path: Path | None = None) -> Context:
         imprt.module == "__future__" and any(alias.name == "annotations" for alias in imprt.names)
         for imprt in imports
     )
-    table, deferred_annotations = _get_config_and_annotations(file_path, deferred_annotations)
+    toml, deferred_annotations = _get_config_and_annotations(file_path, deferred_annotations)
     return Context(
         deferred_annotations,
-        config.from_table(table),
-        table.get("method-by-name", False),
-        table.get("method-by-dependency", True),
+        Config.from_toml(toml),
     )
 
 
@@ -56,10 +52,9 @@ def _handle_pyproject(file_path: Path, deferred_annotations: bool) -> tuple[Toml
             return {}, deferred_annotations
         case pyproject:
             data = _load_pyproject(pyproject)
-            config: TomlTable = data.get("tool", {}).get("sdsort", {})
             if not deferred_annotations:
                 deferred_annotations = _targets_python314_or_newer(data)
-            return config, deferred_annotations
+            return data, deferred_annotations
 
 
 @lru_cache

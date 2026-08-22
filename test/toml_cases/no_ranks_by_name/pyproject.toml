@@ -1,2 +1,2 @@
 [tool.sdsort]
-method-by-name = true
+method-order = ["dependency", "name"]

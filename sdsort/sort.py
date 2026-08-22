@@ -22,6 +22,8 @@ from .utils.file import read_file, split_lines
 if TYPE_CHECKING:
     from collections.abc import Callable, Collection, Sequence
 
+    from sdsort.config import Config, MethodVisibility
+
 ResultType: TypeAlias = (
     tuple[Literal["sorted"], str] | tuple[Literal["skipped"], None] | tuple[Literal["unchanged"], None]
 )
@@ -106,33 +108,24 @@ def _find_top_level_blocks(syntax_tree: Module, source_lines: list[str], context
     return blocks
 
 
-SortMethodByAttribute = Literal["dependency", "visibility", "name"]
-
-
 def _sort_methods_within_class(source_lines: list[str], class_def: ClassDef, context: Context) -> list[str]:
     # TODO: recursively sort methods within nested classes?
 
     # Find methods
     blocks = ClassBlock(class_def, source_lines, context).method_blocks
 
-    sort_methods_by: list[SortMethodByAttribute] = ["dependency"]
-    if context.sort_by_name:
-        sort_methods_by.append("name")
-    if bool(context.config):
-        sort_methods_by.insert(0, "visibility")
-
-    start = find_start_of_class_body(class_def, source_lines)
-
+    # Sort them
     sorted_blocks = blocks
-    for attribute in reversed(sort_methods_by):
+    for attribute in reversed(context.config.method_order):
         match attribute:
             case "dependency":
                 sorted_blocks = _sort_methods_by_dependency(sorted_blocks)
             case "name":
                 sorted_blocks = _sort_methods_by_name(sorted_blocks)
             case "visibility":
-                sorted_blocks = _sort_methods_by_visibility(sorted_blocks)
+                sorted_blocks = _sort_methods_by_visibility(sorted_blocks, context.config)
 
+    start = find_start_of_class_body(class_def, source_lines)
     return _rearrange_lines(source_lines, blocks, sorted_blocks, start)
 
 
@@ -147,8 +140,20 @@ def _sort_methods_by_name(blocks: list[FunctionBlock]):
     return list(sorted(blocks, key=lambda method: method.name))
 
 
-def _sort_methods_by_visibility(blocks: list[FunctionBlock]):
-    return list(sorted(blocks, key=lambda method: method.key))
+def _sort_methods_by_visibility(blocks: list[FunctionBlock], config: Config):
+    try:
+        fallback_index = config.visibility_order.index("*")
+    except ValueError:
+        fallback_index = len(config.visibility_order)
+
+    def get_visibility_index(function: FunctionBlock):
+        visibility = determine_visibility(function.name)
+        try:
+            return config.visibility_order.index(visibility)
+        except ValueError:
+            return fallback_index
+
+    return list(sorted(blocks, key=get_visibility_index))
 
 
 def _find_dependencies(
@@ -208,36 +213,7 @@ def _rearrange_lines(
         while sort_idx < len(sorted_blocks) and sorted_blocks[sort_idx].start < orig_block.start:
             result.extend(lines_of(sorted_blocks[sort_idx]))
             sort_idx += 1
-    return _finalize_rearranged_lines(source_lines, result, start, pos)
 
-
-def _rearrange_lines_by_partition(
-    source_lines: list[str], original_blocks: Collection[B], sorted_blocks: list[B], start: int = 0
-) -> list[str]:
-    def lines_of(block: Block) -> list[str]:
-        return source_lines[block.start : block.end]
-
-    result: list[str] = []
-    pos = start
-    sort_idx = 0
-    blocks_by_start: dict[int, Block] = {}
-    stop = start
-    for block in original_blocks:
-        blocks_by_start[block.start] = block
-        stop = max(stop, block.end)
-    while pos < stop:
-        block = blocks_by_start.get(pos)
-        if block is None:
-            result.append(source_lines[pos])
-            pos += 1
-            continue
-        result.extend(lines_of(sorted_blocks[sort_idx]))
-        sort_idx += 1
-        pos = block.end
-    return _finalize_rearranged_lines(source_lines, result, start, pos)
-
-
-def _finalize_rearranged_lines(source_lines: Sequence[str], result: list[str], start: int, pos: int) -> list[str]:
     if start == 0:
         # Include trailing content if we are doing the whole file
         result.extend(source_lines[pos:])
@@ -279,3 +255,15 @@ def _method_call_target(node: Call) -> str | None:
 def _function_call_target(node: Call) -> str | None:
     """Extract target name from direct function() calls."""
     return node.func.id if isinstance(node.func, Name) else None
+
+
+def determine_visibility(name: str) -> MethodVisibility:
+    if name.startswith("__"):
+        if name.endswith("__"):
+            return "dunder"
+        else:
+            return "private"
+    elif name.startswith("_"):
+        return "protected"
+    else:
+        return "public"

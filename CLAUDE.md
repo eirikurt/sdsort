@@ -50,6 +50,12 @@ Tests use input/output file pairs in `test/cases/`:
 
 The test runner compares `step_down_sort()` output against the `.out.py` content.
 
+Configuration-driven cases live in `test/toml_cases/` in a two-level layout: each
+subdirectory holds the `pyproject.toml` under test plus one or more `*.in.py`/`*.out.py`
+pairs exercising that configuration. Cases are discovered by scanning the directory, so a
+new case is added by dropping a file pair in (or a new subdirectory with its own
+`pyproject.toml`) — no test code changes needed.
+
 ## Configuration
 
 - Python ≥3.11, line length 115, strict type checking

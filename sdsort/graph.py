@@ -48,45 +48,22 @@ class DependenciesVisitor(Generic[B]):
     path: list[B] = field(default_factory=list, init=False)
 
     def sort_top_block(self, block: B) -> None:
-        self._move_current_block(block)
+        self._place_last(block)
         for dependency in self._successors(block):
             self.sort_top_block(dependency)
 
     def sort(self, block: B) -> None:
         self.path.append(block)
-        self._move_current_block(block)
+        self._place_last(block)
         filtered = (s for s in self._successors(block) if s not in self.path)
         for dependency in filtered:
             self.sort(dependency)
         self.path.pop()
 
-    def sort_by_partition(self: FnVisitor, block: FunctionBlock) -> None:
-        self.path.append(block)
-        self._move_current_block(block)
-        filtered = (s for s in self._successors(block) if s not in self.path and s.key == block.key)
-        for dependency in filtered:
-            self.sort_by_partition(dependency)
-        self.path.pop()
-
-    def sort_by_partition_and_name(self: FnVisitor, block: FunctionBlock, seen: set[FunctionBlock]) -> None:
-        if block in seen:
-            return
-        else:
-            seen.add(block)
-            self.path.append(block)
-            self._move_current_block(block)
-            filtered = (
-                s for s in self._successors(block) if s not in self.path and s.key == block.key and s not in seen
-            )
-            for dependency in filtered:
-                self.sort_by_partition_and_name(dependency, seen)
-            self.path.pop()
-
     def _successors(self, block: B) -> Iterator[B]:
         return iter(self.dependencies[block])
 
-    def _move_current_block(self, block: B) -> None:
-        # Move the current block last
+    def _place_last(self, block: B) -> None:
         try:
             self.sorted_blocks.remove(block)
         except ValueError:

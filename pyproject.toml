@@ -35,7 +35,7 @@ build-backend = "uv_build"
 
 [tool.ruff]
 include = ["sdsort/**/*.py", "test/**/*.py"]
-exclude = ["test/cases"]
+exclude = ["test/cases", "test/toml_cases"]
 line-length = 115
 target-version = "py311"
 
@@ -48,7 +48,7 @@ select = ["E4", "E7", "E9", "F", "I", "TC", "UP"]
 # pyright enforced; extra rules can be opted into deliberately, one at a time.
 typeCheckingMode = "standard"
 include = ["sdsort", "test"]
-exclude = ["test/cases", "test/repos"]
+exclude = ["test/cases", "test/toml_cases", "test/repos"]
 
 # Opted in from basedpyright's extra rules: the codebase is clean under these, and
 # they catch annotations that silently decay into Any / Unknown.
