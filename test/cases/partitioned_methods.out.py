@@ -9,10 +9,10 @@ class Service:
         self.public_helper()
         self._private_helper()
 
-    def public_helper(self):
+    def public_b(self):
         pass
 
-    def public_b(self):
+    def public_helper(self):
         pass
 
     def _private_helper(self):

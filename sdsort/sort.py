@@ -106,34 +106,49 @@ def _find_top_level_blocks(syntax_tree: Module, source_lines: list[str], context
     return blocks
 
 
+SortMethodByAttribute = Literal["dependency", "visibility", "name"]
+
+
 def _sort_methods_within_class(source_lines: list[str], class_def: ClassDef, context: Context) -> list[str]:
     # TODO: recursively sort methods within nested classes?
 
     # Find methods
     blocks = ClassBlock(class_def, source_lines, context).method_blocks
 
-    # Build dependency graph among methods
-    visitor = _find_dependencies(blocks, _method_call_target).into_visitor()
-    # Re-order methods as needed
+    sort_methods_by: list[SortMethodByAttribute] = ["dependency"]
+    if context.sort_by_name:
+        sort_methods_by.append("name")
+    if bool(context.config):
+        sort_methods_by.insert(0, "visibility")
+
     start = find_start_of_class_body(class_def, source_lines)
-    match bool(context.config), context.sort_by_name:
-        case False, False:
-            for block in blocks:
-                visitor.sort(block)
-            return _rearrange_lines(source_lines, blocks, visitor.sorted_blocks, start)
-        case False, True:
-            for method in sorted(blocks, key=lambda method: method.name):
-                visitor.sort(method)
-            return _rearrange_lines(source_lines, blocks, visitor.sorted_blocks, start)
-        case True, False:
-            for method in sorted(blocks, key=lambda method: method.key):
-                visitor.sort_by_partition(method)
-            return _rearrange_lines(source_lines, blocks, visitor.sorted_blocks, start)
-        case True, True:
-            seen = set[FunctionBlock]()
-            for method in sorted(blocks, key=lambda method: (method.key, method.name)):
-                visitor.sort_by_partition_and_name(method, seen)
-            return _rearrange_lines_by_partition(source_lines, blocks, visitor.sorted_blocks, start)
+
+    sorted_blocks = blocks
+    for attribute in reversed(sort_methods_by):
+        match attribute:
+            case "dependency":
+                sorted_blocks = _sort_methods_by_dependency(sorted_blocks)
+            case "name":
+                sorted_blocks = _sort_methods_by_name(sorted_blocks)
+            case "visibility":
+                sorted_blocks = _sort_methods_by_visibility(sorted_blocks)
+
+    return _rearrange_lines(source_lines, blocks, sorted_blocks, start)
+
+
+def _sort_methods_by_dependency(blocks: list[FunctionBlock]):
+    visitor = _find_dependencies(blocks, _method_call_target).into_visitor()
+    for block in blocks:
+        visitor.sort(block)
+    return visitor.sorted_blocks
+
+
+def _sort_methods_by_name(blocks: list[FunctionBlock]):
+    return list(sorted(blocks, key=lambda method: method.name))
+
+
+def _sort_methods_by_visibility(blocks: list[FunctionBlock]):
+    return list(sorted(blocks, key=lambda method: method.key))
 
 
 def _find_dependencies(
