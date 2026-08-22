@@ -25,7 +25,9 @@ The package is split across several modules in `sdsort/`:
 - **`cli.py`** — Click entry point (`main()`). Handles `--check` flag, directory expansion, and output formatting.
 - **`sort.py`** — Core logic (`step_down_sort()`). Orchestrates the two-pass sort: top-level blocks first, then methods within each class.
 - **`block.py`** — `Block` hierarchy: `FunctionBlock`, `ClassBlock`, `StatementBlock`. Each knows its line range, how to find outgoing calls (`find_calls()`), and how to find predecessor constraints (`find_predecessors()`).
-- **`context.py`** — `Context` dataclass. Detects `from __future__ import annotations` to decide whether type annotations should be evaluated as predecessors.
+- **`context.py`** — `Context` dataclass and `gather_context()`. Combines the two facts a sort needs about a file: whether annotations are deferred (`from __future__ import annotations`, or a `requires-python` that rules out eager evaluation) and which `Config` applies.
+- **`pyproject.py`** — `PyProject`. Encapsulates one pyproject.toml: `nearest_to()` finds the file governing a source path, `config` and `targets_python314_or_newer` read what sdsort needs out of it. Parsing is cached per path, so a project's file is read once per run.
+- **`config.py`** — `Config` (the `[tool.sdsort]` table: `method-order`, `visibility-order`) and `ConfigError`. `from_toml()` validates the table and refuses anything it cannot honour — unknown keys or values, non-list values, duplicates — reporting every problem at once. `cli.py` catches `ConfigError` and exits 1 without rewriting a single file.
 - **`graph.py`** — `AcyclicGraph`. Stores directed edges between blocks; silently drops edges that would create cycles.
 - **`format.py`** — `normalize_blank_lines()`. Re-parses the rearranged source and enforces PEP 8 spacing (2 blanks before top-level defs, 1 between methods).
 - **`utils/`** — `ast.py` (AST helpers including `determine_line_range()`), `file.py`, `pluralize.py`, `timer.py`.

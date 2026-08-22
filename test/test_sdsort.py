@@ -1,5 +1,6 @@
 import ast
 import os
+import re
 import shutil
 import sys
 import tomllib
@@ -10,10 +11,10 @@ from typing import TYPE_CHECKING
 import pytest
 from click.testing import CliRunner
 
-from sdsort import cli, context, main, step_down_sort
+from sdsort import cli, main, pyproject, step_down_sort
 from sdsort.cli import _MAX_WORKERS, _MIN_FILES_FOR_PARALLELISM, _worker_count
-from sdsort.config import Config
-from sdsort.context import _targets_python314_or_newer
+from sdsort.config import Config, ConfigError
+from sdsort.pyproject import _targets_python314_or_newer
 from sdsort.utils.file import read_file
 
 if TYPE_CHECKING:
@@ -157,10 +158,10 @@ def test_pyproject_is_parsed_once_per_project(tmp_path: Path):
     for source_path in source_paths:
         source_path.write_text("def function():\n    pass\n", encoding="utf-8")
 
-    context._load_pyproject.cache_clear()
+    pyproject._load_table.cache_clear()
     for source_path in source_paths:
         step_down_sort(source_path)
-    assert context._load_pyproject.cache_info().misses == 1
+    assert pyproject._load_table.cache_info().misses == 1
 
 
 def test_when_single_file_is_targeted_then_other_files_are_not_modified(
@@ -334,7 +335,7 @@ def test_parallel_run_reports_the_same_warnings_as_serial(tmp_path: Path, runner
         write_unparseable(tmp_path / name)
 
     serial = runner.invoke(main, ["-j", "1", str(tmp_path)])
-    parallel = runner.invoke(main, ["-j", "4", str(tmp_path)])
+    parallel = runner.invoke(main, ["-j", "2", str(tmp_path)])
 
     assert serial.stderr == parallel.stderr
     assert "broken_one.py" in serial.stderr
@@ -381,3 +382,42 @@ def test_write_failure_after_a_successful_sort_still_crashes(
     os.chmod(unsorted_file, 0o444)
     with pytest.raises(OSError):
         runner.invoke(main, ["-j", "1", str(tmp_path)], catch_exceptions=False)
+
+
+def test_config_error_names_the_pyproject_it_came_from(tmp_path: Path):
+    pyproject_path = tmp_path / "pyproject.toml"
+    pyproject_path.write_text('[tool.sdsort]\nmethod-order = ["no-such-attribute"]\n', encoding="utf-8")
+    source_path = tmp_path / "service.py"
+    source_path.write_text("def function():\n    pass\n", encoding="utf-8")
+
+    with pytest.raises(ConfigError, match=re.escape(str(pyproject_path))):
+        step_down_sort(source_path)
+
+
+def test_invalid_configuration_is_reported_and_no_file_is_rewritten(tmp_path: Path, runner: CliRunner):
+    (tmp_path / "pyproject.toml").write_text('[tool.sdsort]\nno-such-key = ["dependency"]\n', encoding="utf-8")
+    source_path = tmp_path / "service.py"
+    original = "def helper():\n    return 1\n\n\ndef caller():\n    return helper()\n"
+    source_path.write_text(original, encoding="utf-8")
+
+    result = runner.invoke(main, [str(tmp_path)])
+
+    assert result.exit_code == 1
+    assert "invalid sdsort configuration" in result.stderr
+    assert "no-such-key" in result.stderr
+    assert read_file(source_path) == original, "No file may be rewritten under a configuration sdsort rejected"
+
+
+def test_invalid_configuration_is_reported_from_worker_processes(tmp_path: Path, runner: CliRunner):
+    # The error has to survive being pickled out of a worker process.
+    (tmp_path / "pyproject.toml").write_text(
+        '[tool.sdsort]\nmethod-order = ["no-such-attribute"]\n', encoding="utf-8"
+    )
+    for name in ("first.py", "second.py"):
+        (tmp_path / name).write_text("def helper():\n    return 1\n\n\ndef caller():\n    return helper()\n")
+
+    result = runner.invoke(main, ["-j", "2", str(tmp_path)])
+
+    assert result.exit_code == 1
+    assert "invalid sdsort configuration" in result.stderr
+    assert "no-such-attribute" in result.stderr
