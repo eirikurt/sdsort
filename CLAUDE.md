@@ -44,17 +44,26 @@ The package is split across several modules in `sdsort/`:
 
 ## Test Structure
 
-Tests use input/output file pairs in `test/cases/`:
-- `*.in.py` - Input source with methods in arbitrary order
-- `*.out.py` - Expected output after sorting
+Tests use input/output file pairs under `test/cases/`, in a two-level layout:
 
-The test runner compares `step_down_sort()` output against the `.out.py` content.
+```
+test/cases/<configuration>/
+    pyproject.toml    # the configuration under test
+    <case>.in.py      # input source, items in arbitrary order
+    <case>.out.py     # expected output after sorting
+```
 
-Configuration-driven cases live in `test/toml_cases/` in a two-level layout: each
-subdirectory holds the `pyproject.toml` under test plus one or more `*.in.py`/`*.out.py`
-pairs exercising that configuration. Cases are discovered by scanning the directory, so a
-new case is added by dropping a file pair in (or a new subdirectory with its own
-`pyproject.toml`) — no test code changes needed.
+Each subdirectory is one configuration, holding one or more case pairs that exercise it.
+`test/cases/default/` holds the cases that run against sdsort's defaults; its
+`pyproject.toml` is deliberately empty so those cases resolve their configuration there
+rather than from the repository root.
+
+`test_cases` discovers the pairs by scanning, so a new case is added by dropping a file
+pair in (or a new subdirectory with its own `pyproject.toml`) — no test code to touch. It
+compares `step_down_sort()` output against the `.out.py` content, and requires a case whose
+input already matches its expected output to be reported as `unchanged`/`skipped` rather
+than rewritten. A case needing a newer Python than the project floor is gated by an entry
+in `MINIMUM_PYTHON_VERSIONS`.
 
 ## Configuration
 

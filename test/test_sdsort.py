@@ -5,6 +5,7 @@ import sys
 import tomllib
 from os import mkdir
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 from click.testing import CliRunner
@@ -14,8 +15,16 @@ from sdsort.cli import _MAX_WORKERS, _MIN_FILES_FOR_PARALLELISM, _worker_count
 from sdsort.context import _targets_python314_or_newer
 from sdsort.utils.file import read_file
 
-TEST_CASES_DIR = Path("test", "cases")
-TOML_CASES_DIR = Path("test", "toml_cases")
+if TYPE_CHECKING:
+    from _pytest.mark.structures import ParameterSet
+
+CASES_DIR = Path("test", "cases")
+DEFAULT_CASES_DIR = CASES_DIR / "default"
+"""The cases run with no `[tool.sdsort]` table, i.e. against the default configuration."""
+MINIMUM_PYTHON_VERSIONS = {
+    # The `type` alias statement is a syntax error before 3.12, so this case cannot even be parsed.
+    "default/type_declaration": (3, 12),
+}
 UNPARSEABLE_SOURCE = "def f(:\n"
 
 
@@ -24,22 +33,40 @@ def write_unparseable(path: Path) -> Path:
     return path
 
 
-def discover_toml_cases() -> dict[str, tuple[Path, Path]]:
-    """Every `*.in.py`/`*.out.py` pair below `test/toml_cases`, keyed by "<configuration>/<case>".
+def discover_cases():
+    """Every `*.in.py`/`*.out.py` pair below `test/cases`, as parameters named "<configuration>/<case>".
 
-    The directory layout is two levels: each subdirectory of `test/toml_cases` holds the
-    pyproject.toml under test plus one or more case pairs exercising that configuration.
+    The layout is two levels deep: each subdirectory of `test/cases` holds the pyproject.toml
+    under test plus one or more case pairs exercising that configuration. Adding a case is
+    therefore a matter of dropping a file pair in, with no test code to touch.
     """
-    cases: dict[str, tuple[Path, Path]] = {}
-    for input_path in sorted(TOML_CASES_DIR.glob("*/*.in.py")):
+    cases: list[ParameterSet] = []
+    for input_path in sorted(CASES_DIR.glob("*/*.in.py")):
         case_name = input_path.name.removesuffix(".in.py")
         expected_path = input_path.with_name(f"{case_name}.out.py")
         assert expected_path.is_file(), f"{input_path} has no matching {expected_path.name}"
-        cases[f"{input_path.parent.name}/{case_name}"] = (input_path, expected_path)
+
+        case_id = f"{input_path.parent.name}/{case_name}"
+        minimum_version = MINIMUM_PYTHON_VERSIONS.get(case_id)
+        cases.append(
+            pytest.param(
+                input_path,
+                expected_path,
+                id=case_id,
+                marks=[]
+                if minimum_version is None
+                else [
+                    pytest.mark.skipif(
+                        sys.version_info < minimum_version,
+                        reason=f"requires Python {'.'.join(str(part) for part in minimum_version)}+",
+                    )
+                ],
+            )
+        )
     return cases
 
 
-TOML_CASES = discover_toml_cases()
+CASES = discover_cases()
 
 
 @pytest.fixture
@@ -50,13 +77,13 @@ def runner() -> CliRunner:
 @pytest.fixture
 def unsorted_file(tmp_path: Path) -> Path:
     """A file sdsort will re-arrange. Compare it against the `sorted_output` fixture."""
-    return Path(shutil.copy(TEST_CASES_DIR / "comments.in.py", tmp_path))
+    return Path(shutil.copy(DEFAULT_CASES_DIR / "comments.in.py", tmp_path))
 
 
 @pytest.fixture
 def already_sorted_file(tmp_path: Path) -> Path:
     """A file already in step-down order, so a run over it reports no changes."""
-    return Path(shutil.copy(TEST_CASES_DIR / "comments.out.py", tmp_path))
+    return Path(shutil.copy(DEFAULT_CASES_DIR / "comments.out.py", tmp_path))
 
 
 @pytest.fixture
@@ -68,65 +95,23 @@ def unparseable_file(tmp_path: Path) -> Path:
 @pytest.fixture
 def sorted_output() -> str:
     """What the `unsorted_file` fixture's contents look like once sorted."""
-    return read_file(TEST_CASES_DIR / "comments.out.py")
+    return read_file(DEFAULT_CASES_DIR / "comments.out.py")
 
 
-@pytest.mark.parametrize(
-    "test_case,",
-    [
-        "single_class",
-        "comments",
-        "circular",
-        "nested_class",
-        "nested_function",
-        "dataclass",
-        "top_level_functions",
-        "top_level_with_invocation",
-        "mixed_class_and_functions",
-        "function_decorator",
-        "async_functions",
-        "circular_functions",
-        "multiple_barriers",
-        "pytest_fixtures",
-        "sandwiched_decorator",
-        "parametrized_test",
-        "overloads",
-        "type_hints",
-        "jpe",
-        "multiline_string",
-        "circular_class",
-        "statement_references_later_definition",
-        "flask_tag",
-        "partial_function",
-        "class_attribute_name_collision",
-        "class_attribute_references_outer_function",
-        "dangling_comment_between_defs",
-        "moved_class_with_dependency",
-        "deferred_class_attribute_annotations",
-        "deferred_statement_annotation",
-        "skip_file_directive",
-    ],
-)
-def test_all_cases(test_case: str):
-    # Arrange
-    input_file_path = TEST_CASES_DIR / f"{test_case}.in.py"
-    expected_output_file_path = TEST_CASES_DIR / f"{test_case}.out.py"
-    expected_output = read_file(expected_output_file_path)
+@pytest.mark.parametrize("input_path,expected_path", CASES)
+def test_cases(input_path: Path, expected_path: Path):
+    source = read_file(input_path)
+    expected_output = read_file(expected_path)
 
-    # Act
-    _, actual_output = step_down_sort(input_file_path)
-
-    if actual_output is None:
-        actual_output = read_file(input_file_path)
-    assert actual_output == expected_output
-
-
-@pytest.mark.parametrize("input_path,expected_path", TOML_CASES.values(), ids=TOML_CASES.keys())
-def test_toml_configuration_cases(input_path: Path, expected_path: Path):
     status, actual_output = step_down_sort(input_path)
 
-    assert status == "sorted"
-    assert actual_output == read_file(expected_path)
+    if source == expected_output:
+        # A case whose input is already in step-down order must be left alone.
+        assert status in ("unchanged", "skipped"), f"{input_path.name} should not have been rewritten"
+        assert actual_output is None
+    else:
+        assert status == "sorted", f"{input_path.name} should have been rearranged"
+        assert actual_output == expected_output
 
 
 def test_pyproject_is_parsed_once_per_project(tmp_path: Path):
@@ -141,23 +126,11 @@ def test_pyproject_is_parsed_once_per_project(tmp_path: Path):
     assert context._load_pyproject.cache_info().misses == 1
 
 
-@pytest.mark.skipif(sys.version_info < (3, 12), reason="`type` alias statement requires Python 3.12+")
-def test_type_alias_is_not_reordered_below_class_it_references():
-    input_file_path = TEST_CASES_DIR / "type_declaration.in.py"
-    expected_output = read_file(TEST_CASES_DIR / "type_declaration.out.py")
-
-    _, actual_output = step_down_sort(input_file_path)
-
-    if actual_output is None:
-        actual_output = read_file(input_file_path)
-    assert actual_output == expected_output
-
-
 def test_when_single_file_is_targeted_then_other_files_are_not_modified(
     tmp_path: Path, runner: CliRunner, unsorted_file: Path, sorted_output: str
 ):
     # Arrange
-    other_file = TEST_CASES_DIR / "dataclass.in.py"
+    other_file = DEFAULT_CASES_DIR / "dataclass.in.py"
     other_path = shutil.copy(other_file, tmp_path)
 
     # Act
@@ -174,11 +147,11 @@ def test_when_directory_is_provided_then_all_python_files_in_it_are_sorted(tmp_p
 
     # Copy a couple of files
     for tc in test_cases:
-        shutil.copy(TEST_CASES_DIR / f"{tc}.in.py", tmp_path)
+        shutil.copy(DEFAULT_CASES_DIR / f"{tc}.in.py", tmp_path)
 
     subdir_path = tmp_path / "subdir"
     mkdir(subdir_path)
-    subdir_file_path = shutil.copy(TEST_CASES_DIR / "single_class.in.py", subdir_path)
+    subdir_file_path = shutil.copy(DEFAULT_CASES_DIR / "single_class.in.py", subdir_path)
 
     # Act
     runner.invoke(main, [str(tmp_path)])
@@ -189,7 +162,7 @@ def test_when_directory_is_provided_then_all_python_files_in_it_are_sorted(tmp_p
 
     # Assert
     for tc, file_after in files_after.items():
-        assert file_after == read_file(TEST_CASES_DIR / f"{tc}.out.py")
+        assert file_after == read_file(DEFAULT_CASES_DIR / f"{tc}.out.py")
     # TODO: assert that other files in directory were not modified?
 
 
@@ -258,7 +231,7 @@ def test_parallel_run_matches_serial_run(tmp_path: Path, runner: CliRunner):
     for directory in (serial_dir, parallel_dir):
         mkdir(directory)
         for tc in test_cases:
-            shutil.copy(TEST_CASES_DIR / f"{tc}.in.py", directory)
+            shutil.copy(DEFAULT_CASES_DIR / f"{tc}.in.py", directory)
 
     serial_result = runner.invoke(main, ["-j", "1", str(serial_dir)])
     parallel_result = runner.invoke(main, ["-j", "4", str(parallel_dir)])
@@ -266,7 +239,7 @@ def test_parallel_run_matches_serial_run(tmp_path: Path, runner: CliRunner):
     assert serial_result.exit_code == 0, serial_result.output
     assert parallel_result.exit_code == 0, parallel_result.output
     for tc in test_cases:
-        expected = read_file(TEST_CASES_DIR / f"{tc}.out.py")
+        expected = read_file(DEFAULT_CASES_DIR / f"{tc}.out.py")
         assert read_file(serial_dir / f"{tc}.in.py") == expected
         assert read_file(parallel_dir / f"{tc}.in.py") == expected, f"{tc} differs when sorted in parallel"
 

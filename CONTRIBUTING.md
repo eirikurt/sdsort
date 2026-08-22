@@ -55,24 +55,43 @@ case like `single_class` or a standalone test like `form_feed`.
 
 This is the part most worth understanding before you contribute a change.
 
-Most tests are **input/output file pairs** in `test/cases/`:
+Most tests are **input/output file pairs** under `test/cases/`:
 
 - `<name>.in.py` — source with functions/methods in some arbitrary order.
 - `<name>.out.py` — the expected result after sorting.
 
-The runner in `test/test_sdsort.py` feeds each `.in.py` file through
-`step_down_sort()` and asserts the output matches the corresponding `.out.py`
-file exactly.
+The pairs sit one level deep, in a directory per configuration:
+
+```
+test/cases/<configuration>/
+    pyproject.toml    # the configuration these cases run under
+    <name>.in.py
+    <name>.out.py
+```
+
+`test/cases/default/` is where most cases live — its `pyproject.toml` holds no
+`[tool.sdsort]` table, so those cases exercise sdsort's default behavior. The
+other directories each pin one configuration (`full_ranks`, `partial_ranks`,
+`private_first_by_name`, …) and hold the cases that exercise it.
+
+The runner in `test/test_sdsort.py` discovers every pair by scanning, feeds each
+`.in.py` file through `step_down_sort()`, and asserts the output matches the
+corresponding `.out.py` file exactly. A case whose `.in.py` already matches its
+`.out.py` must be reported as unchanged rather than rewritten.
 
 ### Adding a test case
 
 Fixing a bug or adding a behavior almost always means adding a case:
 
-1. Create `test/cases/<name>.in.py` with the input source.
-2. Create `test/cases/<name>.out.py` with the expected sorted output.
-3. Add `"<name>"` to the `test_all_cases` parametrize list in
-   `test/test_sdsort.py`.
+1. Pick the directory whose configuration you need — `test/cases/default/`
+   unless the behavior is configuration-specific.
+2. Create `<name>.in.py` there with the input source.
+3. Create `<name>.out.py` with the expected sorted output.
 4. Run it: `make case <name>`.
+
+Nothing else to register — the case is picked up by the scan. To test a
+configuration that has no directory yet, create one with a `pyproject.toml`
+containing the `[tool.sdsort]` table under test, then add pairs to it.
 
 Give the case a descriptive name — the existing cases (e.g.
 `circular_functions`, `deferred_statement_annotation`,
