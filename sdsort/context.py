@@ -14,7 +14,6 @@ if TYPE_CHECKING:
 @dataclass
 class Context:
     deferred_annotations: bool
-    """Whether lazy annotations are enabled or not."""
     config: Config = field(default_factory=Config)
 
 

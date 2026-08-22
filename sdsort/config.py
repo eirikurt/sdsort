@@ -50,11 +50,6 @@ class ConfigError(Exception):
 
 
 def _find_problems(table: dict[str, Any]) -> list[str]:
-    """Everything wrong with a `[tool.sdsort]` table, so that one run reports all of it.
-
-    sdsort rewrites files in place, so a configuration it cannot honour as written is refused
-    rather than partially applied.
-    """
     problems = [f"unknown key '{key}'" for key in table if key not in ALLOWED_VALUES]
     for key, allowed in ALLOWED_VALUES.items():
         if key not in table:
