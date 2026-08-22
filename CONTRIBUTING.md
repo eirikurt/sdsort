@@ -71,17 +71,29 @@ test/cases/<configuration>/
 
 `test/cases/default/` is where most cases live — its `pyproject.toml` holds no
 `[tool.sdsort]` table, so those cases exercise sdsort's default behavior. Each
-other directory pins one configuration and holds the cases that exercise it. The
-directory name describes that configuration:
+other directory pins one configuration and holds the cases that exercise it.
 
-- The stem names the `visibility-order` by its leading entries —
-  `dunder_then_private`, `private_first`.
-- `_only` marks a partial `visibility-order`: the visibilities it doesn't list
-  are unranked and sort last (`dunder_and_private_only`, `dunder_only`).
-- `_by_name` marks `"name"` in `method-order`, i.e. methods that are otherwise
-  tied sort alphabetically.
-- `no_visibility_by_name` leaves `"visibility"` out of `method-order` entirely,
-  so `visibility-order` never comes into play.
+Those directory names are not chosen, they are **derived from the configuration**:
+
+- `method-order` becomes the initials of its attributes: `["visibility",
+  "dependency", "name"]` → `v_d_n`.
+- `visibility-order` follows after a double underscore, abbreviated: `dunder` →
+  `dun`, `public` → `pub`, `protected` → `prot`, `private` → `priv`, and the
+  `"*"` wildcard → `rest`. So `["dunder", "public", "private", "protected"]` →
+  `dun_pub_priv_prot`, and `["dunder", "*", "public"]` → `dun_rest_pub`.
+- A partial `visibility-order` simply lists fewer entries (`v_d__dun_priv`); the
+  visibilities it omits are unranked and sort where the `"*"` wildcard sits, or
+  last when there is no wildcard.
+- When `"visibility"` is absent from `method-order` the visibility order never
+  comes into play, so the name stops at the method order (`d_n`).
+- A configuration that resolves to sdsort's defaults is named `default`, however
+  it is spelled: an empty `[tool.sdsort]` table, no table at all, or one that
+  writes the default values out in full.
+
+`encode_configuration()` in `test/test_sdsort.py` derives the name and the test
+suite asserts every directory matches, so a directory cannot end up claiming a
+configuration it does not hold — and no two of them can hold the same one.
+Changing a `pyproject.toml` therefore means renaming its directory to match.
 
 Because the directory states the configuration, a case name only has to say what
 the case exercises — `dependency_chain`, not
@@ -104,7 +116,9 @@ Fixing a bug or adding a behavior almost always means adding a case:
 
 Nothing else to register — the case is picked up by the scan. To test a
 configuration that has no directory yet, create one with a `pyproject.toml`
-containing the `[tool.sdsort]` table under test, then add pairs to it.
+containing the `[tool.sdsort]` table under test, then add pairs to it. Name it
+per the scheme above; if you get it wrong, the failure message tells you the
+name the configuration derives.
 
 Give the case a descriptive name — the existing cases (e.g.
 `circular_functions`, `deferred_statement_annotation`,

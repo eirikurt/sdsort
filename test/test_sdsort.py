@@ -12,6 +12,7 @@ from click.testing import CliRunner
 
 from sdsort import cli, context, main, step_down_sort
 from sdsort.cli import _MAX_WORKERS, _MIN_FILES_FOR_PARALLELISM, _worker_count
+from sdsort.config import Config
 from sdsort.context import _targets_python314_or_newer
 from sdsort.utils.file import read_file
 
@@ -25,6 +26,8 @@ MINIMUM_PYTHON_VERSIONS = {
     # The `type` alias statement is a syntax error before 3.12, so this case cannot even be parsed.
     "default/type_declaration": (3, 12),
 }
+METHOD_ABBREVIATIONS = {"visibility": "v", "dependency": "d", "name": "n"}
+VISIBILITY_ABBREVIATIONS = {"dunder": "dun", "public": "pub", "protected": "prot", "private": "priv", "*": "rest"}
 UNPARSEABLE_SOURCE = "def f(:\n"
 
 
@@ -41,12 +44,46 @@ def discover_cases():
     therefore a matter of dropping a file pair in, with no test code to touch.
     """
     cases: list[ParameterSet] = []
-    for input_path in sorted(CASES_DIR.glob("*/*.in.py")):
+    for case_dir in sorted(path for path in CASES_DIR.iterdir() if path.is_dir()):
+        expected_dir_name = encode_configuration(case_dir)
+        assert case_dir.name == expected_dir_name, (
+            f"{case_dir} holds the configuration named '{expected_dir_name}'."
+            " Rename the directory, or correct the pyproject.toml it does not match."
+        )
+        cases.extend(discover_cases_in(case_dir))
+
+    unmatched = MINIMUM_PYTHON_VERSIONS.keys() - {case.id for case in cases}
+    assert not unmatched, f"MINIMUM_PYTHON_VERSIONS names cases that do not exist: {sorted(unmatched)}"
+    return cases
+
+
+def encode_configuration(case_dir: Path) -> str:
+    pyproject_path = case_dir / "pyproject.toml"
+    assert pyproject_path.is_file(), f"{case_dir} has no pyproject.toml stating the configuration it tests"
+    with pyproject_path.open("rb") as pyproject:
+        toml = tomllib.load(pyproject)
+
+    configuration = Config.from_toml(toml)
+    if configuration == Config.default():
+        return "default"
+
+    method_order = "_".join(METHOD_ABBREVIATIONS[attribute] for attribute in configuration.method_order)
+    if "visibility" not in configuration.method_order:
+        # Without visibility partitioning, the visibility order never comes into play.
+        return method_order
+    visibility_order = "_".join(VISIBILITY_ABBREVIATIONS[name] for name in configuration.visibility_order)
+    return f"{method_order}__{visibility_order}"
+
+
+def discover_cases_in(case_dir: Path):
+    """The case pairs in one configuration directory, as parameters named "<configuration>/<case>"."""
+    cases: list[ParameterSet] = []
+    for input_path in sorted(case_dir.glob("*.in.py")):
         case_name = input_path.name.removesuffix(".in.py")
         expected_path = input_path.with_name(f"{case_name}.out.py")
         assert expected_path.is_file(), f"{input_path} has no matching {expected_path.name}"
 
-        case_id = f"{input_path.parent.name}/{case_name}"
+        case_id = f"{case_dir.name}/{case_name}"
         minimum_version = MINIMUM_PYTHON_VERSIONS.get(case_id)
         cases.append(
             pytest.param(

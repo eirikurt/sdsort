@@ -58,10 +58,13 @@ Each subdirectory is one configuration, holding one or more case pairs that exer
 `pyproject.toml` is deliberately empty so those cases resolve their configuration there
 rather than from the repository root.
 
-Directory names describe the configuration: the stem names the `visibility-order` by its
-leading entries, `_only` marks a partial order whose unlisted visibilities sort last, and
-`_by_name` marks `"name"` in `method-order`. Case names describe only the case, since the
-directory already carries the configuration.
+Directory names are derived from the configuration, not chosen: `method-order` as the
+initials of its attributes, then `visibility-order` abbreviated after a double underscore
+(`v_d_n__dun_pub_priv_prot`), stopping at the method order when `"visibility"` is absent
+from it (`d_n`). `encode_configuration()` derives the name and discovery asserts every
+directory matches it, so a directory cannot claim a configuration it does not hold and no
+two can hold the same one. Case names describe only the case, since the directory already
+carries the configuration.
 
 `test_cases` discovers the pairs by scanning, so a new case is added by dropping a file
 pair in (or a new subdirectory with its own `pyproject.toml`) — no test code to touch. It
