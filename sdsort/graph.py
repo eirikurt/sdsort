@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Generic, TypeAlias, TypeVar
+from typing import TYPE_CHECKING, Generic, TypeVar
 
-from .block import Block, FunctionBlock
+from .block import Block
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Generator, Sequence
 
 B = TypeVar("B", bound=Block)
 
@@ -37,38 +36,35 @@ class AcyclicGraph(Generic[B]):
             stack.extend(self._edges[node])
         return False
 
+    def get_successors(self, _from: B) -> Generator[B, None, None]:
+        yield from self._edges[_from]
+
     def into_visitor(self) -> DependenciesVisitor[B]:
-        return DependenciesVisitor(self._edges)
+        return DependenciesVisitor(self)
 
 
-@dataclass(slots=True)
 class DependenciesVisitor(Generic[B]):
-    dependencies: dict[B, list[B]]
-    sorted_blocks: list[B] = field(default_factory=list, init=False)
-    path: list[B] = field(default_factory=list, init=False)
+    def __init__(self, graph: AcyclicGraph[B]):
+        self._graph = graph
+        self._sorted_blocks: list[B] = []
 
-    def sort_top_block(self, block: B) -> None:
-        self._place_last(block)
-        for dependency in self._successors(block):
-            self.sort_top_block(dependency)
+    @property
+    def sorted_blocks(self) -> Sequence[B]:
+        return self._sorted_blocks
 
-    def sort(self, block: B) -> None:
-        self.path.append(block)
+    def visit(self, block: B, path: list[B] | None = None) -> None:
+        if not path:
+            path = []
+        path.append(block)
         self._place_last(block)
-        filtered = (s for s in self._successors(block) if s not in self.path)
+        filtered = (s for s in self._graph.get_successors(block) if s not in path)
         for dependency in filtered:
-            self.sort(dependency)
-        self.path.pop()
-
-    def _successors(self, block: B) -> Iterator[B]:
-        return iter(self.dependencies[block])
+            self.visit(dependency, path)
+        path.pop()
 
     def _place_last(self, block: B) -> None:
         try:
-            self.sorted_blocks.remove(block)
+            self._sorted_blocks.remove(block)
         except ValueError:
             pass
-        self.sorted_blocks.append(block)
-
-
-FnVisitor: TypeAlias = DependenciesVisitor[FunctionBlock]
+        self._sorted_blocks.append(block)

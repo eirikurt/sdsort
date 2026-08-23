@@ -92,7 +92,7 @@ def _sort_top_level_blocks(source_lines: list[str], syntax_tree: Module, context
         return source_lines
     visitor = _find_dependencies(blocks, _function_call_target).into_visitor()
     for block in blocks:
-        visitor.sort_top_block(block)
+        visitor.visit(block)
     return _rearrange_lines(source_lines, blocks, visitor.sorted_blocks)
 
 
@@ -129,18 +129,18 @@ def _sort_methods_within_class(source_lines: list[str], class_def: ClassDef, con
     return _rearrange_lines(source_lines, blocks, sorted_blocks, start)
 
 
-def _sort_methods_by_dependency(blocks: list[FunctionBlock]):
+def _sort_methods_by_dependency(blocks: Sequence[FunctionBlock]):
     visitor = _find_dependencies(blocks, _method_call_target).into_visitor()
     for block in blocks:
-        visitor.sort(block)
+        visitor.visit(block)
     return visitor.sorted_blocks
 
 
-def _sort_methods_by_name(blocks: list[FunctionBlock]):
+def _sort_methods_by_name(blocks: Sequence[FunctionBlock]):
     return list(sorted(blocks, key=lambda method: method.name))
 
 
-def _sort_methods_by_visibility(blocks: list[FunctionBlock], config: Config):
+def _sort_methods_by_visibility(blocks: Sequence[FunctionBlock], config: Config):
     try:
         fallback_index = config.visibility_order.index("*")
     except ValueError:
