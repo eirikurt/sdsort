@@ -9,7 +9,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
-MethodOrderAttribute = Literal["dependency", "visibility", "name"]
+MethodOrderAttribute = Literal["call", "visibility", "name"]
 MethodVisibility = Literal["dunder", "public", "protected", "private"]
 
 ALLOWED_VALUES: Final[dict[str, tuple[str, ...]]] = {
@@ -21,7 +21,7 @@ ALLOWED_VALUES: Final[dict[str, tuple[str, ...]]] = {
 
 @dataclass(frozen=True)
 class Config:
-    method_order: Sequence[MethodOrderAttribute] = field(default_factory=lambda: ["dependency"])
+    method_order: Sequence[MethodOrderAttribute] = field(default_factory=lambda: ["call"])
     visibility_order: Sequence[MethodVisibility | Literal["*"]] = field(
         default_factory=lambda: ["dunder", "public", "protected", "private"]
     )

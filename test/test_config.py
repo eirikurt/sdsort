@@ -9,7 +9,7 @@ def test_load_config_from_toml():
     # Arrange
     toml = tomllib.loads("""
 [tool.sdsort]
-method-order = ["visibility", "dependency", "name"]
+method-order = ["visibility", "call", "name"]
 visibility-order = ["dunder", "public", "*"]
 """)
 
@@ -17,7 +17,7 @@ visibility-order = ["dunder", "public", "*"]
     config = Config.from_toml(toml)
 
     # Assert
-    assert config.method_order == ["visibility", "dependency", "name"]
+    assert config.method_order == ["visibility", "call", "name"]
     assert config.visibility_order == ["dunder", "public", "*"]
 
 
@@ -47,7 +47,7 @@ def test_key_spelled_with_underscores_is_rejected():
     # without this the whole table would silently do nothing.
     toml = tomllib.loads("""
 [tool.sdsort]
-method_order = ["dependency", "name"]
+method_order = ["call", "name"]
 """)
 
     with pytest.raises(ConfigError, match="method_order"):
@@ -58,7 +58,7 @@ def test_value_that_is_not_a_list_is_rejected():
     # Iterating a bare string would otherwise treat each of its characters as an entry.
     toml = tomllib.loads("""
 [tool.sdsort]
-method-order = "dependency"
+method-order = "call"
 """)
 
     with pytest.raises(ConfigError, match="method-order.*must be a list"):
@@ -68,7 +68,7 @@ method-order = "dependency"
 def test_list_entry_that_is_not_a_string_is_rejected():
     toml = tomllib.loads("""
 [tool.sdsort]
-method-order = ["dependency", 3]
+method-order = ["call", 3]
 """)
 
     with pytest.raises(ConfigError, match="3"):
@@ -78,7 +78,7 @@ method-order = ["dependency", 3]
 def test_duplicate_values_are_rejected():
     toml = tomllib.loads("""
 [tool.sdsort]
-method-order = ["visibility", "dependency", "visibility"]
+method-order = ["visibility", "call", "visibility"]
 """)
 
     with pytest.raises(ConfigError, match="duplicate.*visibility"):
@@ -89,7 +89,7 @@ def test_every_problem_is_reported_at_once():
     # Fixing a configuration one error per run would be tedious.
     toml = tomllib.loads("""
 [tool.sdsort]
-no-such-key = ["dependency"]
+no-such-key = ["call"]
 visibility-order = ["dunder", "no-such-visibility", "dunder"]
 """)
 

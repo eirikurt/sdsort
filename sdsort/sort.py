@@ -120,8 +120,8 @@ def _sort_methods_within_class(source_lines: list[str], class_def: ClassDef, con
     sorted_blocks = blocks
     for attribute in reversed(context.config.method_order):
         match attribute:
-            case "dependency":
-                sorted_blocks = _sort_methods_by_dependency(sorted_blocks)
+            case "call":
+                sorted_blocks = _sort_methods_by_call(sorted_blocks)
             case "name":
                 sorted_blocks = _sort_methods_by_name(sorted_blocks)
             case "visibility":
@@ -131,7 +131,7 @@ def _sort_methods_within_class(source_lines: list[str], class_def: ClassDef, con
     return _rearrange_lines(source_lines, blocks, sorted_blocks, start)
 
 
-def _sort_methods_by_dependency(blocks: Sequence[FunctionBlock]):
+def _sort_methods_by_call(blocks: Sequence[FunctionBlock]):
     visitor = _find_dependencies(blocks, _method_call_target).into_visitor()
     for block in blocks:
         visitor.visit(block)

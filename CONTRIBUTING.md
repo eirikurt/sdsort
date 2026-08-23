@@ -76,7 +76,7 @@ other directory pins one configuration and holds the cases that exercise it.
 Those directory names are not chosen, they are **derived from the configuration**:
 
 - `method-order` becomes the initials of its attributes: `["visibility",
-  "dependency", "name"]` → `v_d_n`.
+  "call", "name"]` → `v_c_n`.
 - `visibility-order` follows after a double underscore, abbreviated: `dunder` →
   `dun`, `public` → `pub`, `protected` → `prot`, `private` → `priv`, and the
   `"*"` wildcard → `rest`. So `["dunder", "public", "private", "protected"]` →

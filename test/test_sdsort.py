@@ -27,7 +27,7 @@ MINIMUM_PYTHON_VERSIONS = {
     # The `type` alias statement is a syntax error before 3.12, so this case cannot even be parsed.
     "default/type_declaration": (3, 12),
 }
-METHOD_ABBREVIATIONS = {"visibility": "v", "dependency": "d", "name": "n"}
+METHOD_ABBREVIATIONS = {"visibility": "v", "call": "c", "name": "n"}
 VISIBILITY_ABBREVIATIONS = {"dunder": "dun", "public": "pub", "protected": "prot", "private": "priv", "*": "rest"}
 UNPARSEABLE_SOURCE = "def f(:\n"
 
@@ -397,7 +397,7 @@ def test_config_error_names_the_pyproject_it_came_from(tmp_path: Path):
 
 
 def test_invalid_configuration_is_reported_and_no_file_is_rewritten(tmp_path: Path, runner: CliRunner):
-    (tmp_path / "pyproject.toml").write_text('[tool.sdsort]\nno-such-key = ["dependency"]\n', encoding="utf-8")
+    (tmp_path / "pyproject.toml").write_text('[tool.sdsort]\nno-such-key = ["call"]\n', encoding="utf-8")
     source_path = tmp_path / "service.py"
     original = "def helper():\n    return 1\n\n\ndef caller():\n    return helper()\n"
     source_path.write_text(original, encoding="utf-8")
