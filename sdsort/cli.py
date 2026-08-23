@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Literal, TypeAlias
 
 import click
 
+from .config import ConfigError
 from .sort import step_down_sort
 from .utils.pluralize import pluralize
 from .utils.timer import Timer
@@ -52,8 +53,12 @@ FileOutcome: TypeAlias = (
 def main(paths: tuple[str, ...], check: bool, jobs: int):
     file_paths = _expand_file_paths(paths)
 
-    with Timer() as t:
-        results = _sort_files(sorted(file_paths), check, jobs)
+    try:
+        with Timer() as t:
+            results = _sort_files(sorted(file_paths), check, jobs)
+    except ConfigError as error:
+        click.secho(f"Error: {error}", fg="red", bold=True, err=True)
+        raise SystemExit(1) from None
 
     _print_results(results, check, t.elapsed)
 

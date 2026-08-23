@@ -1,0 +1,3 @@
+[tool.sdsort]
+method-order = ["visibility", "call"]
+visibility-order = ["dunder", "private"]

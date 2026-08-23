@@ -6,7 +6,9 @@ from io import BytesIO
 from itertools import takewhile
 from pathlib import Path
 from tokenize import COMMENT, tokenize
-from typing import TYPE_CHECKING, Literal, TypeAlias
+from typing import TYPE_CHECKING, Literal, TypeAlias, TypeVar
+
+from sdsort.utils.function import determine_visibility
 
 from .block import Block, ClassBlock, FunctionBlock, block_for, resolve_overlapping_ranges
 from .context import Context, gather_context
@@ -20,11 +22,16 @@ from .utils.ast import (
 from .utils.file import read_file, split_lines
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Collection
+    from collections.abc import Callable, Collection, Sequence
+
+    from sdsort.config import Config
 
 ResultType: TypeAlias = (
     tuple[Literal["sorted"], str] | tuple[Literal["skipped"], None] | tuple[Literal["unchanged"], None]
 )
+
+
+B = TypeVar("B", bound=Block)
 
 
 def step_down_sort(python_file_path: str | Path) -> ResultType:
@@ -85,12 +92,10 @@ def _sort_top_level_blocks(source_lines: list[str], syntax_tree: Module, context
 
     if not blocks:
         return source_lines
-
-    deps = _find_dependencies(blocks, _function_call_target)
-    sorted_blocks: list[Block] = []
+    visitor = _find_dependencies(blocks, _function_call_target).into_visitor()
     for block in blocks:
-        _depth_first_sort(block, deps, sorted_blocks, [])
-    return _rearrange_lines(source_lines, blocks, sorted_blocks)
+        visitor.visit(block)
+    return _rearrange_lines(source_lines, blocks, visitor.sorted_blocks)
 
 
 def _find_top_level_blocks(syntax_tree: Module, source_lines: list[str], context: Context):
@@ -111,27 +116,55 @@ def _sort_methods_within_class(source_lines: list[str], class_def: ClassDef, con
     # Find methods
     blocks = ClassBlock(class_def, source_lines, context).method_blocks
 
-    # Build dependency graph among methods
-    dependencies = _find_dependencies(blocks, _method_call_target)
+    # Sort them
+    sorted_blocks = blocks
+    for attribute in reversed(context.config.method_order):
+        match attribute:
+            case "call":
+                sorted_blocks = _sort_methods_by_call(sorted_blocks)
+            case "name":
+                sorted_blocks = _sort_methods_by_name(sorted_blocks)
+            case "visibility":
+                sorted_blocks = _sort_methods_by_visibility(sorted_blocks, context.config)
 
-    # Re-order methods as needed
-    sorted_blocks: list[Block] = []
+    start = find_start_of_class_body(class_def, source_lines)
+    return _rearrange_lines(source_lines, blocks, sorted_blocks, start)
+
+
+def _sort_methods_by_call(blocks: Sequence[FunctionBlock]):
+    visitor = _find_dependencies(blocks, _method_call_target).into_visitor()
     for block in blocks:
-        _depth_first_sort(block, dependencies, sorted_blocks, [])
+        visitor.visit(block)
+    return visitor.sorted_blocks
 
-    # Copy lines from the original source, shifting the methods around as needed
-    return _rearrange_lines(
-        source_lines, blocks, sorted_blocks, start=find_start_of_class_body(class_def, source_lines)
-    )
+
+def _sort_methods_by_name(blocks: Sequence[FunctionBlock]):
+    return sorted(blocks, key=lambda method: method.name)
+
+
+def _sort_methods_by_visibility(blocks: Sequence[FunctionBlock], config: Config):
+    try:
+        fallback_index = config.visibility_order.index("*")
+    except ValueError:
+        fallback_index = len(config.visibility_order)
+
+    def get_visibility_index(function: FunctionBlock):
+        visibility = determine_visibility(function.name)
+        try:
+            return config.visibility_order.index(visibility)
+        except ValueError:
+            return fallback_index
+
+    return sorted(blocks, key=get_visibility_index)
 
 
 def _find_dependencies(
-    blocks: Collection[Block],
+    blocks: Collection[B],
     get_call_target: Callable[[Call], str | None],
-):
-    dependencies = AcyclicGraph()
+) -> AcyclicGraph[B]:
+    dependencies = AcyclicGraph[B]()
 
-    blocks_by_name: dict[str, list[Block]] = defaultdict(list)
+    blocks_by_name: dict[str, list[B]] = defaultdict(list)
     for block in blocks:
         for name in block.names:
             blocks_by_name[name].append(block)
@@ -153,32 +186,12 @@ def _find_dependencies(
     return dependencies
 
 
-def _depth_first_sort(
-    current_block: Block,
-    dependencies: AcyclicGraph,
-    sorted_blocks: list[Block],
-    path: list[Block],
-):
-    path.append(current_block)
-
-    # Move the current block last
-    try:
-        sorted_blocks.remove(current_block)
-    except ValueError:
-        pass
-    sorted_blocks.append(current_block)
-
-    for dependency in dependencies.get_successors(current_block):
-        if dependency not in path:
-            _depth_first_sort(dependency, dependencies, sorted_blocks, path)
-
-    path.pop()
-
-
 def _rearrange_lines(
-    source_lines: list[str], original_blocks: Collection[Block], sorted_blocks: list[Block], start: int = 0
+    source_lines: list[str], original_blocks: Collection[B], sorted_blocks: Sequence[B], start: int = 0
 ) -> list[str]:
-    def lines_of(block: Block) -> list[str]:
+    """Copy lines from the original source, shifting the methods/functions around as needed."""
+
+    def lines_of(block: B) -> list[str]:
         return source_lines[block.start : block.end]
 
     result: list[str] = []
@@ -214,9 +227,9 @@ def _rearrange_lines(
 
 
 def _ensure_number_of_leading_blank_lines_remains_unchanged(
-    original_lines: list[str],
+    original_lines: Collection[str],
     rearranged_lines: list[str],
-):
+) -> list[str]:
     assert len(original_lines) == len(rearranged_lines)
     num_leading_blanks_before = 0
     for _ in takewhile(is_blank, original_lines):

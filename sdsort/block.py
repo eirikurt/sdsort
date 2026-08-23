@@ -223,7 +223,7 @@ class ClassBlock(Block):
         return [n.name for n in self._nodes]
 
     @property
-    def method_blocks(self) -> Collection[Block]:
+    def method_blocks(self) -> list[FunctionBlock]:
         return self._methods
 
 
@@ -241,6 +241,7 @@ class FunctionBlock(Block):
         super().__init__(node, context)
         self.start, self.end = determine_line_range(node, source_lines)
         self._source_lines = source_lines
+        self.name = node.name
 
     def append(self, node: AST) -> bool:
         if isinstance(node, (FunctionDef, AsyncFunctionDef)) and node.name == self._nodes[0].name:

@@ -1,0 +1,3 @@
+# Intentionally holds no [tool.sdsort] table: the cases in this directory exercise
+# sdsort's default configuration. The file exists so they resolve their configuration
+# here rather than from the repository root pyproject.toml.
