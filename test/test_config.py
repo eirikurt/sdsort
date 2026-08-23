@@ -100,3 +100,23 @@ visibility-order = ["dunder", "no-such-visibility", "dunder"]
     assert "no-such-key" in message, message
     assert "no-such-visibility" in message, message
     assert "duplicate" in message, message
+
+
+def test_table_that_is_not_a_table_is_rejected():
+    # Iterating a bare string would otherwise read each of its characters as a key.
+    toml = tomllib.loads("""
+[tool]
+sdsort = "call"
+""")
+
+    with pytest.raises(ConfigError, match=r"\[tool.sdsort\].*must be a table, not str"):
+        Config.from_toml(toml)
+
+
+def test_tool_that_is_not_a_table_is_rejected():
+    # Nothing lives at tool.sdsort when tool itself holds a scalar, and reaching for it
+    # there would raise AttributeError rather than reporting the file as unconfigurable.
+    toml = tomllib.loads('tool = "sdsort"')
+
+    with pytest.raises(ConfigError, match=r"\[tool.sdsort\].*must be a table, not str"):
+        Config.from_toml(toml)
