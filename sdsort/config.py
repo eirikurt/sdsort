@@ -5,6 +5,7 @@ from functools import lru_cache
 from typing import TYPE_CHECKING, Any, Final, Literal, cast, get_args
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
     from pathlib import Path
 
 
@@ -20,8 +21,8 @@ ALLOWED_VALUES: Final[dict[str, tuple[str, ...]]] = {
 
 @dataclass(frozen=True)
 class Config:
-    method_order: list[MethodOrderAttribute] = field(default_factory=lambda: ["dependency"])
-    visibility_order: list[MethodVisibility | Literal["*"]] = field(
+    method_order: Sequence[MethodOrderAttribute] = field(default_factory=lambda: ["dependency"])
+    visibility_order: Sequence[MethodVisibility | Literal["*"]] = field(
         default_factory=lambda: ["dunder", "public", "protected", "private"]
     )
 
