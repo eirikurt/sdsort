@@ -158,6 +158,8 @@ def test_pyproject_is_parsed_once_per_project(tmp_path: Path):
     for source_path in source_paths:
         source_path.write_text("def function():\n    pass\n", encoding="utf-8")
 
+    # XXX: this test should not be poking the innards of the pyproject module
+    # TODO: refactor PyProject for observability so this can be avoided
     pyproject._load_table.cache_clear()
     for source_path in source_paths:
         step_down_sort(source_path)
