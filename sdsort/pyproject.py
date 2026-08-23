@@ -24,12 +24,7 @@ class PyProject:
     @classmethod
     def nearest_to(cls, source_path: Path) -> PyProject | None:
         """The pyproject.toml governing `source_path`: the closest one at or above it, if any."""
-        directory = source_path.parent
-        for parent in [directory, *directory.parents]:
-            candidate = parent / "pyproject.toml"
-            if candidate.is_file():
-                return cls(candidate, _load_table(candidate))
-        return None
+        return _nearest_to_directory(source_path.parent)
 
     @property
     def config(self) -> Config:
@@ -43,6 +38,17 @@ class PyProject:
     def targets_python314_or_newer(self) -> bool:
         """Whether `requires-python` rules out every version that evaluates annotations eagerly."""
         return _targets_python314_or_newer(self.table)
+
+
+@lru_cache
+def _nearest_to_directory(directory: Path) -> PyProject | None:
+    """Every file in a directory is governed by the same pyproject.toml, so the walk up the
+    tree runs once per directory rather than once per file being sorted."""
+    for parent in [directory, *directory.parents]:
+        candidate = parent / "pyproject.toml"
+        if candidate.is_file():
+            return PyProject(candidate, _load_table(candidate))
+    return None
 
 
 @lru_cache
