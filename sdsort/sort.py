@@ -8,6 +8,8 @@ from pathlib import Path
 from tokenize import COMMENT, tokenize
 from typing import TYPE_CHECKING, Literal, TypeAlias, TypeVar
 
+from sdsort.utils.function import determine_visibility
+
 from .block import Block, ClassBlock, FunctionBlock, block_for, resolve_overlapping_ranges
 from .context import Context, gather_context
 from .format import normalize_blank_lines
@@ -22,7 +24,7 @@ from .utils.file import read_file, split_lines
 if TYPE_CHECKING:
     from collections.abc import Callable, Collection, Sequence
 
-    from sdsort.config import Config, MethodVisibility
+    from sdsort.config import Config
 
 ResultType: TypeAlias = (
     tuple[Literal["sorted"], str] | tuple[Literal["skipped"], None] | tuple[Literal["unchanged"], None]
@@ -255,15 +257,3 @@ def _method_call_target(node: Call) -> str | None:
 def _function_call_target(node: Call) -> str | None:
     """Extract target name from direct function() calls."""
     return node.func.id if isinstance(node.func, Name) else None
-
-
-def determine_visibility(name: str) -> MethodVisibility:
-    if name.startswith("__"):
-        if name.endswith("__"):
-            return "dunder"
-        else:
-            return "private"
-    elif name.startswith("_"):
-        return "protected"
-    else:
-        return "public"
