@@ -139,7 +139,7 @@ def _sort_methods_by_call(blocks: Sequence[FunctionBlock]):
 
 
 def _sort_methods_by_name(blocks: Sequence[FunctionBlock]):
-    return list(sorted(blocks, key=lambda method: method.name))
+    return sorted(blocks, key=lambda method: method.name)
 
 
 def _sort_methods_by_visibility(blocks: Sequence[FunctionBlock], config: Config):
@@ -155,7 +155,7 @@ def _sort_methods_by_visibility(blocks: Sequence[FunctionBlock], config: Config)
         except ValueError:
             return fallback_index
 
-    return list(sorted(blocks, key=get_visibility_index))
+    return sorted(blocks, key=get_visibility_index)
 
 
 def _find_dependencies(
