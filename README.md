@@ -1,4 +1,4 @@
-# sdsort
+<img width="2560" height="640" alt="sdsort-banner-1280x320" src="https://github.com/user-attachments/assets/2cec254a-7253-44e9-9b2d-123bef6f6d82" />
 
 Sorts **top-level functions** and **class methods** in Python files according to the step-down rule, as described in [Robert C. Martin's](https://en.wikipedia.org/wiki/Robert_C._Martin) [Clean Code](https://www.oreilly.com/library/view/clean-code-a/9780136083238/).
 More concretely, functions and methods are ordered in a depth-first-traversal order of the dependency tree, so higher-level code appears before lower-level code.
@@ -112,7 +112,3 @@ repos:
     hooks:
       - id: sdsort
 ```
-
-## Maturity
-
-It's early days. Consider this a beta for now.
