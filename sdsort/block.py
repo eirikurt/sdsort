@@ -34,6 +34,7 @@ from .utils.ast import (
     Function,
     determine_line_range,
     find_first_line,
+    find_receiver,
     get_method_nodes,
 )
 
@@ -259,6 +260,23 @@ class FunctionBlock(Block):
                 for node in walk(subtree):
                     if isinstance(node, Call):
                         yield node
+
+    def find_method_call_targets(self) -> Generator[str, None, None]:
+        """Names of the methods called on the receiver (e.g. `self.method()`)."""
+        for root in self._nodes:
+            receiver = find_receiver(root)
+            if receiver is None:
+                continue
+            # Unlike find_calls(), skip args and returns: the receiver isn't bound in defaults or annotations
+            for statement in root.body:
+                for node in walk(statement):
+                    if (
+                        isinstance(node, Call)
+                        and isinstance(node.func, Attribute)
+                        and isinstance(node.func.value, Name)
+                        and node.func.value.id == receiver
+                    ):
+                        yield node.func.attr
 
     def find_predecessors(self) -> Generator[str, None, None]:
         for function in self._nodes:

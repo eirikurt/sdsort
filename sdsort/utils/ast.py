@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ast import AsyncFunctionDef, ClassDef, FunctionDef, Module, stmt
+from ast import AsyncFunctionDef, ClassDef, FunctionDef, Module, Name, stmt
 from itertools import takewhile
 from typing import TypeAlias
 
@@ -19,6 +19,17 @@ def find_start_of_class_body(cls: ClassDef, source_lines: list[str]):
 
 def get_method_nodes(classNode: ClassDef):
     return (node for node in classNode.body if isinstance(node, (FunctionDef, AsyncFunctionDef)))
+
+
+def find_receiver(method: Function) -> str | None:
+    """Name of the parameter a method is bound to (e.g. `self` or `cls`).
+
+    None if there isn't one: a static method, or a method without positional parameters.
+    """
+    if any(isinstance(decorator, Name) and decorator.id == "staticmethod" for decorator in method.decorator_list):
+        return None
+    positional_args = [*method.args.posonlyargs, *method.args.args]
+    return positional_args[0].arg if positional_args else None
 
 
 def determine_line_range(class_or_function: ClassOrFunction, source_lines: list[str]) -> tuple[int, int]:

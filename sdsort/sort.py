@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ast import Attribute, Call, ClassDef, Module, Name, parse
+from ast import ClassDef, Module, Name, parse
 from collections import defaultdict
 from io import BytesIO
 from itertools import takewhile
@@ -22,7 +22,7 @@ from .utils.ast import (
 from .utils.file import read_file, split_lines
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Collection, Sequence
+    from collections.abc import Callable, Collection, Generator, Iterable, Sequence
 
     from sdsort.config import Config
 
@@ -92,7 +92,7 @@ def _sort_top_level_blocks(source_lines: list[str], syntax_tree: Module, context
 
     if not blocks:
         return source_lines
-    visitor = _find_dependencies(blocks, _function_call_target).into_visitor()
+    visitor = _find_dependencies(blocks, _function_call_targets).into_visitor()
     for block in blocks:
         visitor.visit(block)
     return _rearrange_lines(source_lines, blocks, visitor.sorted_blocks)
@@ -132,7 +132,7 @@ def _sort_methods_within_class(source_lines: list[str], class_def: ClassDef, con
 
 
 def _sort_methods_by_call(blocks: Sequence[FunctionBlock]):
-    visitor = _find_dependencies(blocks, _method_call_target).into_visitor()
+    visitor = _find_dependencies(blocks, FunctionBlock.find_method_call_targets).into_visitor()
     for block in blocks:
         visitor.visit(block)
     return visitor.sorted_blocks
@@ -160,7 +160,7 @@ def _sort_methods_by_visibility(blocks: Sequence[FunctionBlock], config: Config)
 
 def _find_dependencies(
     blocks: Collection[B],
-    get_call_target: Callable[[Call], str | None],
+    find_call_targets: Callable[[B], Iterable[str]],
 ) -> AcyclicGraph[B]:
     dependencies = AcyclicGraph[B]()
 
@@ -176,12 +176,10 @@ def _find_dependencies(
                 dependencies.add_edge(_from=predecessor_block, to=block)
 
     for block in blocks:
-        for call in block.find_calls():
-            target = get_call_target(call)
-            if target is not None:
-                for successor_block in blocks_by_name.get(target, []):
-                    if isinstance(successor_block, FunctionBlock) and not successor_block.is_pytest_fixture:
-                        dependencies.add_edge(_from=block, to=successor_block)
+        for target in find_call_targets(block):
+            for successor_block in blocks_by_name.get(target, []):
+                if isinstance(successor_block, FunctionBlock) and not successor_block.is_pytest_fixture:
+                    dependencies.add_edge(_from=block, to=successor_block)
 
     return dependencies
 
@@ -245,15 +243,8 @@ def _ensure_number_of_leading_blank_lines_remains_unchanged(
     return rearranged_lines
 
 
-def _method_call_target(node: Call) -> str | None:
-    """Extract target name from self.method() calls."""
-    return (
-        node.func.attr
-        if isinstance(node.func, Attribute) and isinstance(node.func.value, Name) and node.func.value.id == "self"
-        else None
-    )
-
-
-def _function_call_target(node: Call) -> str | None:
-    """Extract target name from direct function() calls."""
-    return node.func.id if isinstance(node.func, Name) else None
+def _function_call_targets(block: Block) -> Generator[str, None, None]:
+    """Extract target names from direct function() calls."""
+    for call in block.find_calls():
+        if isinstance(call.func, Name):
+            yield call.func.id
