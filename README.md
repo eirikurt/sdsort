@@ -1,4 +1,4 @@
-<img width="2560" height="640" alt="sdsort-banner-1280x320" src="https://github.com/user-attachments/assets/2cec254a-7253-44e9-9b2d-123bef6f6d82" />
+<img width="2560" alt="sdsort-banner-1280x320" src="https://github.com/user-attachments/assets/2cec254a-7253-44e9-9b2d-123bef6f6d82" />
 
 Sorts **top-level functions** and **class methods** in Python files according to the step-down rule, as described in [Robert C. Martin's](https://en.wikipedia.org/wiki/Robert_C._Martin) [Clean Code](https://www.oreilly.com/library/view/clean-code-a/9780136083238/).
 More concretely, functions and methods are ordered in a depth-first-traversal order of the dependency tree, so higher-level code appears before lower-level code.
@@ -108,7 +108,7 @@ To prevent sdsort from modifying a particular file, add a `# sdsort: skip_file` 
 ```yaml
 repos:
   - repo: https://github.com/eirikurt/sdsort
-    rev: v1.3.0
+    rev: v1.3.1
     hooks:
       - id: sdsort
 ```
