@@ -14,6 +14,7 @@ from ast import (
     FunctionDef,
     Import,
     ImportFrom,
+    Lambda,
     Name,
     Store,
     iter_child_nodes,
@@ -34,7 +35,9 @@ from .utils.ast import (
     Function,
     determine_line_range,
     find_first_line,
+    find_receiver,
     get_method_nodes,
+    get_parameters,
 )
 
 if TYPE_CHECKING:
@@ -260,6 +263,39 @@ class FunctionBlock(Block):
                     if isinstance(node, Call):
                         yield node
 
+    def find_method_call_targets(self) -> Generator[str, None, None]:
+        """Names of the methods called on the receiver (e.g. `self.method()`)."""
+        for root in self._nodes:
+            receiver = find_receiver(root)
+            if receiver is None:
+                continue
+            # Unlike find_calls(), skip args and returns: the receiver isn't bound in defaults or annotations.
+            # Walk depth-first with an explicit stack, so calls are found in source order without risking
+            # a RecursionError on deeply nested expressions.
+            pending: list[AST] = list(reversed(root.body))
+            while pending:
+                node = pending.pop()
+                if (
+                    isinstance(node, Call)
+                    and isinstance(node.func, Attribute)
+                    and isinstance(node.func.value, Name)
+                    and node.func.value.id == receiver
+                ):
+                    yield node.func.attr
+                pending.extend(reversed(self._children_in_receiver_scope(node, receiver)))
+
+    @staticmethod
+    def _children_in_receiver_scope(node: AST, receiver: str) -> list[AST]:
+        # A nested function or lambda with a parameter of the same name shadows the receiver in its body,
+        # but its decorators, defaults and annotations are still evaluated in the enclosing scope
+        if isinstance(node, (FunctionDef, AsyncFunctionDef, Lambda)) and any(
+            parameter.arg == receiver for parameter in get_parameters(node.args)
+        ):
+            if isinstance(node, Lambda):
+                return [node.args]
+            return [*node.decorator_list, node.args, *([] if node.returns is None else [node.returns])]
+        return list(iter_child_nodes(node))
+
     def find_predecessors(self) -> Generator[str, None, None]:
         for function in self._nodes:
             for decorator in function.decorator_list:
@@ -273,12 +309,7 @@ class FunctionBlock(Block):
 
     def _get_type_annotations(self):
         for root in self._nodes:
-            all_args = [*root.args.posonlyargs, *root.args.args, *root.args.kwonlyargs]
-            if root.args.vararg:
-                all_args.append(root.args.vararg)
-            if root.args.kwarg:
-                all_args.append(root.args.kwarg)
-            annotation_nodes = [a.annotation for a in all_args if a.annotation is not None]
+            annotation_nodes = [a.annotation for a in get_parameters(root.args) if a.annotation is not None]
             if root.returns is not None:
                 annotation_nodes.append(root.returns)
             for annotation in annotation_nodes:

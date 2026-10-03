@@ -37,9 +37,9 @@ The package is split across several modules in `sdsort/`:
 1. Parse source with `ast.parse()`.
 2. Gather `Context` (detects deferred annotations).
 3. Build `Block` objects for each top-level node. Non-function/class statements merge into `StatementBlock`s which act as "barriers" — any name they reference must be defined before them.
-4. Build a dependency graph: edges from callers to callees (direct `func()` calls at top level; `self.method()` calls inside classes). Type annotations on function signatures are also treated as predecessor constraints (unless annotations are deferred via `__future__`).
+4. Build a dependency graph: edges from callers to callees (direct `func()` calls at top level; calls on the receiver inside classes, i.e. the first parameter of any non-`@staticmethod` method, such as `self.method()` or `cls.method()`). Type annotations on function signatures are also treated as predecessor constraints (unless annotations are deferred via `__future__`).
 5. Depth-first sort: visit each block and recursively pull its dependencies after it.
-6. Rearrange source lines, then re-parse and sort methods within each class using the same algorithm with `self.method()` calls.
+6. Rearrange source lines, then re-parse and sort methods within each class using the same algorithm with receiver calls.
 7. Normalize blank lines with `normalize_blank_lines()`.
 
 `determine_line_range()` in `utils/ast.py` probes beyond AST-reported end lines to capture trailing content (multiline strings, comments) that belongs to a function/method.
