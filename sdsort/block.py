@@ -14,6 +14,7 @@ from ast import (
     FunctionDef,
     Import,
     ImportFrom,
+    Lambda,
     Name,
     Store,
     iter_child_nodes,
@@ -36,6 +37,7 @@ from .utils.ast import (
     find_first_line,
     find_receiver,
     get_method_nodes,
+    get_parameters,
 )
 
 if TYPE_CHECKING:
@@ -269,14 +271,23 @@ class FunctionBlock(Block):
                 continue
             # Unlike find_calls(), skip args and returns: the receiver isn't bound in defaults or annotations
             for statement in root.body:
-                for node in walk(statement):
-                    if (
-                        isinstance(node, Call)
-                        and isinstance(node.func, Attribute)
-                        and isinstance(node.func.value, Name)
-                        and node.func.value.id == receiver
-                    ):
-                        yield node.func.attr
+                yield from self._find_receiver_call_targets(statement, receiver)
+
+    def _find_receiver_call_targets(self, node: AST, receiver: str) -> Generator[str, None, None]:
+        # A nested function or lambda with a parameter of the same name shadows the receiver
+        if isinstance(node, (FunctionDef, AsyncFunctionDef, Lambda)) and any(
+            parameter.arg == receiver for parameter in get_parameters(node.args)
+        ):
+            return
+        if (
+            isinstance(node, Call)
+            and isinstance(node.func, Attribute)
+            and isinstance(node.func.value, Name)
+            and node.func.value.id == receiver
+        ):
+            yield node.func.attr
+        for child in iter_child_nodes(node):
+            yield from self._find_receiver_call_targets(child, receiver)
 
     def find_predecessors(self) -> Generator[str, None, None]:
         for function in self._nodes:
@@ -291,12 +302,7 @@ class FunctionBlock(Block):
 
     def _get_type_annotations(self):
         for root in self._nodes:
-            all_args = [*root.args.posonlyargs, *root.args.args, *root.args.kwonlyargs]
-            if root.args.vararg:
-                all_args.append(root.args.vararg)
-            if root.args.kwarg:
-                all_args.append(root.args.kwarg)
-            annotation_nodes = [a.annotation for a in all_args if a.annotation is not None]
+            annotation_nodes = [a.annotation for a in get_parameters(root.args) if a.annotation is not None]
             if root.returns is not None:
                 annotation_nodes.append(root.returns)
             for annotation in annotation_nodes:

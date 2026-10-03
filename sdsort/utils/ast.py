@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ast import AsyncFunctionDef, ClassDef, FunctionDef, Module, Name, stmt
+from ast import AsyncFunctionDef, ClassDef, FunctionDef, Module, Name, arg, arguments, stmt
 from itertools import takewhile
 from typing import TypeAlias
 
@@ -30,6 +30,15 @@ def find_receiver(method: Function) -> str | None:
         return None
     positional_args = [*method.args.posonlyargs, *method.args.args]
     return positional_args[0].arg if positional_args else None
+
+
+def get_parameters(args: arguments) -> list[arg]:
+    parameters = [*args.posonlyargs, *args.args, *args.kwonlyargs]
+    if args.vararg:
+        parameters.append(args.vararg)
+    if args.kwarg:
+        parameters.append(args.kwarg)
+    return parameters
 
 
 def determine_line_range(class_or_function: ClassOrFunction, source_lines: list[str]) -> tuple[int, int]:
