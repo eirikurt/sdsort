@@ -17,3 +17,12 @@ class Foo:
 
     def closure_helper(self):
         pass
+
+    def shadowing_with_default(self):
+        def inner(self, value=self.default_helper()):
+            return value
+
+        return inner
+
+    def default_helper(self):
+        return 1

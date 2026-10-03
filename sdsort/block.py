@@ -269,25 +269,32 @@ class FunctionBlock(Block):
             receiver = find_receiver(root)
             if receiver is None:
                 continue
-            # Unlike find_calls(), skip args and returns: the receiver isn't bound in defaults or annotations
-            for statement in root.body:
-                yield from self._find_receiver_call_targets(statement, receiver)
+            # Unlike find_calls(), skip args and returns: the receiver isn't bound in defaults or annotations.
+            # Walk depth-first with an explicit stack, so calls are found in source order without risking
+            # a RecursionError on deeply nested expressions.
+            pending: list[AST] = list(reversed(root.body))
+            while pending:
+                node = pending.pop()
+                if (
+                    isinstance(node, Call)
+                    and isinstance(node.func, Attribute)
+                    and isinstance(node.func.value, Name)
+                    and node.func.value.id == receiver
+                ):
+                    yield node.func.attr
+                pending.extend(reversed(self._children_in_receiver_scope(node, receiver)))
 
-    def _find_receiver_call_targets(self, node: AST, receiver: str) -> Generator[str, None, None]:
-        # A nested function or lambda with a parameter of the same name shadows the receiver
+    @staticmethod
+    def _children_in_receiver_scope(node: AST, receiver: str) -> list[AST]:
+        # A nested function or lambda with a parameter of the same name shadows the receiver in its body,
+        # but its decorators, defaults and annotations are still evaluated in the enclosing scope
         if isinstance(node, (FunctionDef, AsyncFunctionDef, Lambda)) and any(
             parameter.arg == receiver for parameter in get_parameters(node.args)
         ):
-            return
-        if (
-            isinstance(node, Call)
-            and isinstance(node.func, Attribute)
-            and isinstance(node.func.value, Name)
-            and node.func.value.id == receiver
-        ):
-            yield node.func.attr
-        for child in iter_child_nodes(node):
-            yield from self._find_receiver_call_targets(child, receiver)
+            if isinstance(node, Lambda):
+                return [node.args]
+            return [*node.decorator_list, node.args, *([] if node.returns is None else [node.returns])]
+        return list(iter_child_nodes(node))
 
     def find_predecessors(self) -> Generator[str, None, None]:
         for function in self._nodes:
