@@ -156,7 +156,7 @@ When in doubt, match the style of the surrounding code.
 
 Write clear, descriptive commit messages — there's no strict format required.
 
-CI runs the test suite across Python 3.11–3.14 on Linux, plus a Windows run,
+CI runs the test suite across Python 3.11–3.15 on Linux, plus a Windows run,
 and enforces the same lint and type checks as `make rpt`. If `make rpt` passes
 locally, CI should be green too.
 
